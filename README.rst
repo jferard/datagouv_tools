@@ -30,7 +30,7 @@ To run the script on Ubuntu, you have to create a database `sirene` and a user `
 
 .. code:: bash
 
-    jferard@jferard-Z170XP-SLI:~/prog/python/sirene2pg$ sudo -u postgres psql
+    ...$ sudo -u postgres psql
     psql (10.10 (Ubuntu 10.10-0ubuntu0.18.04.1))
     Type "help" for help.
 
@@ -46,4 +46,17 @@ And to run your script as sytem `sirene` user.
 
 .. code:: bash
 
-    jferard@jferard-Z170XP-SLI:~/prog/python/sirene2pg$ sudo -u sirene venv/bin/python3.7 -m unittest import_sirene_test.py
+    ...$ sudo -u sirene venv/bin/python3.7 -m unittest import_sirene_test.py
+
+
+Testing
+~~~~~~~
+If needed:
+
+.. code:: bash
+
+    ...$ venv/bin/pip install pytest
+    ...$ venv/bin/pip install pytest-cov
+    ...$ flake8 --exclude=venv && venv/bin/python3.7 -m pytest --cov-report term-missing --cov=import_sirene  && venv/bin/python3.7 -m pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene
+
+

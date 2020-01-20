@@ -7,22 +7,23 @@
 #
 #  Sirene2pg is free software: you can redistribute it and/or modify it under
 #  the terms of the GNU General Public License as published by the Free
-#  Software Foundation, either version 3 of the License, or (at your option) any
-#  later version.
+#  Software Foundation, either version 3 of the License, or (at your option)
+#  any later version.
 #
 #  Sirene2pg is distributed in the hope that it will be useful, but WITHOUT ANY
-#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-#  A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#  You should have received a copy of the GNU General Public License along with
-#  this program. If not, see <http://www.gnu.org/licenses/>.
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+#  details. You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #   This file is part of Sirene2pg.
 
 """
-A small utility to import the SIRENE database (https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret).
+A small utility to import the SIRENE database
+(https://www.data.gouv.fr/fr/datasets/
+base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret).
 """
 import csv
-import itertools
 import logging
 import zipfile
 from abc import ABC, abstractmethod
@@ -48,22 +49,26 @@ class SQLType(Enum):
     BOOLEAN = "boolean"
 
 
-@dataclass
+@dataclass(eq=True)
 class SQLField:
     """
     A SQL field
     """
-    table_name: str
+    table_name: str  # original field name
     field_name: str
-    rank: int
-    comment: str
     type: SQLType
-    length: int
+    rank: int = 0
+    comment: str = ""
+    length: int = 0
+
+    def process(self, process_names: Callable[[str], str]) -> "SQLField":
+        return SQLField(process_names(self.table_name),
+                        process_names(self.field_name), self.type, self.rank,
+                        self.comment, self.length)
 
     def __lt__(self, other):
         return (self.table_name < other.table_name
-                or self.rank < other.rank
-                or self.field_name < other.field_name)
+                or self.rank < other.rank)
 
 
 class SQLIndexType(Enum):
@@ -77,7 +82,7 @@ class SQLIndexType(Enum):
     GIN = "gin"
 
 
-@dataclass
+@dataclass(eq=True)
 class SQLIndex:
     """
     A SQL index
@@ -85,6 +90,10 @@ class SQLIndex:
     table_name: str
     field_name: str
     type: SQLIndexType
+
+    def process(self, process_names: Callable[[str], str]) -> "SQLIndex":
+        return SQLIndex(process_names(self.table_name),
+                        process_names(self.field_name), self.type)
 
     @property
     def name(self):
@@ -135,13 +144,20 @@ class PostgreSQLQueryProvider(QueryProvider):
     """
 
     def __init__(self, table_name: str, fields: Sequence[SQLField],
-                 indices: Iterable[SQLIndex], sql_type_max_size: int,
-                 name_max_size: int):
+                 indices: Iterable[SQLIndex], sql_type_width: int,
+                 name_width: int):
+        """
+        :param table_name: *processed* name of the table
+        :param fields: fields with *processed* names
+        :param indices: indices with *processed* names
+        :param sql_type_width: argument to rjust
+        :param name_width: argument to rjust
+        """
         self._table_name = table_name
         self._fields = fields
         self._indices = indices
-        self._sql_type_max_size = sql_type_max_size
-        self._name_max_size = name_max_size
+        self._sql_type_width = sql_type_width
+        self._name_width = name_width
 
     def create_table(self) -> Iterable[str]:
         return 'DROP TABLE IF EXISTS {}'.format(
@@ -162,17 +178,18 @@ class PostgreSQLQueryProvider(QueryProvider):
                                         field.comment)
 
     def _field_name(self, field: SQLField) -> str:
-        return field.field_name.ljust(self._name_max_size)
+        return field.field_name.ljust(self._name_width)
 
     def _type(self, field: SQLField, comma=','):
         return (field.type.value + comma).ljust(
-            self._sql_type_max_size + len(comma))
+            self._sql_type_width + len(comma))
 
     def prepare_copy(self) -> Iterable[str]:
         return 'TRUNCATE {}'.format(self._table_name),
 
     def copy(self) -> Iterable[str]:
-        return 'COPY {} FROM STDIN HEADER CSV'.format(self._table_name),
+        return "COPY {} FROM STDIN CSV HEADER " \
+               "DELIMITER ',' ENCODING 'UTF-8'".format(self._table_name),
 
     def finalize_copy(self) -> Iterable[str]:
         return ('ANALYZE {}'.format(self._table_name),) + tuple(
@@ -267,77 +284,111 @@ class Source:
     schema_path: Path
 
 
+@dataclass
+class SchemaRow:
+    """
+    A row as in the schema.
+    No snake_case conversion
+    """
+    table_name: str
+    name: str
+    type_name: str
+    length: int
+    rank: int
+    caption: str
+
+
+class SQLTypeProvider(ABC):
+    @abstractmethod
+    def get_type(self, row: SchemaRow) -> SQLType:
+        """
+        :param row: the input row
+        :return: the sql type
+        """
+        pass
+
+
+class SQLIndexProvider(ABC):
+    """
+    A index provider
+    """
+
+    @abstractmethod
+    def get_indices(self, fields: Iterable[SQLField]) -> Iterable[SQLIndex]:
+        """
+        :param fields: the fields of the table
+        :return: the indices to create
+        """
+        pass
+
+
+class SireSQLIndexProvider(SQLIndexProvider):
+    """
+    Provide index for SIREN/SIRET and code postal
+    """
+
+    def __init__(self, *extra_indices: SQLIndex):
+        """
+        :param extra_indices: indices to add
+        """
+        self._extra_indices = extra_indices
+
+    def get_indices(self, fields: Iterable[SQLField]) -> Iterable[SQLIndex]:
+        table_name = next((f.table_name for f in fields), None)
+        for field in fields:
+            if field.field_name[:5] in (
+                    "siren", "siret"):
+                yield SQLIndex(field.table_name, field.field_name,
+                               SQLIndexType.HASH)
+
+        for index in self._extra_indices:
+            if index.table_name == table_name:
+                yield index
+
+
 class SireneSchemaParser:
     """
     A parser for SIRENE csv schemas.
     """
 
-    def __init__(self,
-                 table_name: str,
-                 rows: Iterable[Mapping[str, str]],
-                 force_text: Callable[[Tuple[str, str]], bool],
-                 sql_type_by_sirene_type: Optional[
-                     Mapping[str, str]] = None,
-                 create_siren_indices: bool = True,
-                 extra_indices: Iterable[str] = None):
+    def __init__(self, table_name: str, rows: Iterable[Mapping[str, str]],
+                 type_provider: SQLTypeProvider,
+                 index_provider: SQLIndexProvider):
         """
         :param table_name: the table name
         :param rows: rows of the csv file
-        :param force_text: a function field -> true if should be a text field
-        :param sql_type_by_sirene_type: a mapping sirene -> sql
-        :param create_siren_indices: if True, all siren and siret will be
-        indexed
+        :param type_provider: a provider for sql types
+        :param index_provider: a provider for indices
         """
         self._table_name = table_name
-        self._rows = list(rows)
-        if sql_type_by_sirene_type is None:
-            self._sql_type_by_sirene_type = SQL_TYPE_BY_SIREN_TYPE
-        else:
-            self._sql_type_by_sirene_type = sql_type_by_sirene_type
-        self._force_text = force_text
-        self._create_siren_indices = create_siren_indices
-        if extra_indices is None:
-            self._extra_indices = []
-        else:
-            self._extra_indices = extra_indices
-
-    @property
-    def table_name(self):
-        """
-        :return: name of the table in snake_case
-        """
-        return to_snake(self._table_name).lower()
+        self._rows = [SchemaRow(table_name, row[NAME],
+                                row[TYPE], int(row[LENGTH]),
+                                int(row[RANK]), row[CAPTION]) for row in rows]
+        self._type_provider = type_provider
+        self._index_provider = index_provider
 
     def get_fields(self):
         """
         :return: orderd fields of the table (names are in snake_case)
         """
         return sorted(
-            SQLField(table_name=self.table_name, rank=int(row[RANK]),
-                     field_name=to_snake(row[NAME]),
-                     length=int(row[LENGTH]),
-                     comment=row[CAPTION], type=self._get_type(row))
+            SQLField(table_name=self._table_name, field_name=row.name,
+                     type=self._type_provider.get_type(row), rank=row.rank,
+                     length=row.length,
+                     comment=row.caption)
             for row in self._rows)
 
-    def _get_type(self, row: Mapping[str, str]) -> SQLType:
-        t = self._sql_type_by_sirene_type[row[TYPE]]
-        if (t == SQLType.DATE and row[LENGTH] != '10'
-                or t != SQLType.TEXT and self._force_text(self._table_name,
-                                                          row[NAME])):
-            t = SQLType.TEXT
-        return t
-
-    def get_indices(self) -> Iterator[SQLIndex]:
+    def get_indices(self) -> Iterable[SQLIndex]:
         """
         :return: indices to create for this table
         """
-        if not self._create_siren_indices:
-            return
-        for field in self.get_fields():
-            if field.field_name[:5] in (
-                    "siren", "siret"):
-                yield SQLIndex(self.table_name, field.field_name,
-                               SQLIndexType.HASH)
+        for index in self._index_provider.get_indices(self.get_fields()):
+            if index.table_name == self._table_name:
+                yield index
+
+    @property
+    def table_name(self):
+        return self._table_name
 
 
 def data_sources(sirene_path: Path) -> Iterator[Source]:
@@ -364,49 +415,46 @@ SQL_TYPE_BY_SIREN_TYPE = {
 }
 
 
-def create_provider(schema_parser: SireneSchemaParser,
-                    extra_indices: Iterable[SQLIndex]) -> QueryProvider:
+class PatchedSQLTypeProvider(SQLTypeProvider):
+    def __init__(self, sql_type_by_sirene_type: Mapping[str, SQLType]):
+        """
+        :param sql_type_by_sirene_type: the default mapping
+        """
+        self._sql_type_by_sirene_type = sql_type_by_sirene_type
+
+    def get_type(self, row: SchemaRow) -> SQLType:
+        t = self._sql_type_by_sirene_type[row.type_name]
+        if t == SQLType.DATE and row.length != 10:
+            t = SQLType.TEXT
+
+        if (row.table_name == 'StockEtablissement'
+                and row.name == 'numeroVoieEtablissement'):
+            t = SQLType.TEXT
+        return t
+
+
+class BasicSQLTypeProvider(SQLTypeProvider):
+    def __init__(self, sql_type_by_sirene_type: Mapping[str, SQLType]):
+        """
+        :param sql_type_by_sirene_type: the default mapping
+        """
+        self._sql_type_by_sirene_type = sql_type_by_sirene_type
+
+    def get_type(self, row: SchemaRow) -> SQLType:
+        return self._sql_type_by_sirene_type[row.type_name]
+
+
+def default_force_type(table_name: str, field_name: str) -> Optional[SQLType]:
     """
-    Create a SQL provider.
-
-    :param schema_parser: the parser for the schema
-    :param extra_indices: extra indices
-    :return: a new provider
-    """
-    table_name = schema_parser.table_name
-    fields = schema_parser.get_fields()
-    indices = itertools.chain(schema_parser.get_indices(), extra_indices)
-
-    sql_type_max_size = max(len(f.type.value) for f in fields)
-    name_max_size = max(len(f.field_name) for f in fields)
-    return PostgreSQLQueryProvider(table_name, fields, indices,
-                                   sql_type_max_size,
-                                   name_max_size)
-
-
-def default_create_extra_indices(table_name: str
-                                 ) -> Iterable[SQLIndex]:
-    """
-    SQL
-    :param table_name: the name of the table
-    :return: the indices
-    """
-    if table_name == 'stock_etablissement':
-        extra_indices = SQLIndex(table_name,
-                                 "code_postal_etablissement",
-                                 SQLIndexType.B_TREE),
-    else:
-        extra_indices = ()
-    return extra_indices
-
-
-def default_force_text(table_name: str, field_name: str) -> bool:
-    """
-    :param field: the field
+    :param table_name: the table
+    :param field_name: the field
     :return: true if the field should be a text field
     """
-    return (table_name == 'StockEtablissement'
-            and field_name == 'numeroVoieEtablissement')
+    if (table_name == 'StockEtablissement'
+            and field_name == 'numeroVoieEtablissement'):
+        return SQLType.TEXT
+
+    return None
 
 
 class SireneImporter:
@@ -415,19 +463,22 @@ class SireneImporter:
     """
 
     def __init__(self, logger: logging.Logger, sources: Iterable[Source],
-                 create_extra_indices: Callable[
-                     [str], Iterable[SQLIndex]],
-                 force_text: Callable[[Tuple[str, str]], bool]):
+                 type_provider: SQLTypeProvider,
+                 index_provider: SQLIndexProvider,
+                 process_names: Callable[[str], str]):
         """
         :param logger: the logger
         :param sources: the SIRENE sources
-        :param create_extra_indices: a function table_name -> indices
-        :param force_text: the function field -> force text
+        :param type_provider: a function `field_name, table_name -> None or
+                            a SQLType`
+        :param process_names: a function to convert field and table names
+        :param index_provider: a index provider
         """
         self._logger = logger
         self._sources = sources
-        self._create_extra_indices = create_extra_indices
-        self._force_text = force_text
+        self._type_provider = type_provider
+        self._index_provider = index_provider
+        self._process_names = process_names
 
     def execute(self, executor: QueryExecutor):
         """
@@ -438,8 +489,7 @@ class SireneImporter:
             self._logger.debug("Process data file %s", source)
             try:
                 parser = self._create_schema_parser(source)
-                extra_indices = self._create_extra_indices(parser.table_name)
-                provider = create_provider(parser, extra_indices)
+                provider = self._create_provider(parser)
             except FileNotFoundError:
                 self._logger.warning("CSV Schema not found: %s",
                                      source.schema_path)
@@ -451,8 +501,29 @@ class SireneImporter:
         with open(source.schema_path, 'r', encoding='utf-8') as schema:
             reader = csv.DictReader(schema)
             parser = SireneSchemaParser(source.table_name, reader,
-                                        self._force_text)
+                                        self._type_provider,
+                                        self._index_provider)
         return parser
+
+    def _create_provider(self,
+                         schema_parser: SireneSchemaParser) -> QueryProvider:
+        """
+        Create a SQL provider.
+
+        :param schema_parser: the parser for the schema
+        :return: a new provider
+        """
+        table_name = self._process_names(schema_parser.table_name)
+        fields = [field.process(self._process_names) for field in
+                  schema_parser.get_fields()]
+        indices = [index.process(self._process_names) for index in
+                   schema_parser.get_indices()]
+        sql_type_max_size = max(len(f.type.value) for f in fields)
+        name_max_size = max(len(f.field_name) for f in fields)
+        return PostgreSQLQueryProvider(table_name, fields,
+                                       indices,
+                                       sql_type_max_size,
+                                       name_max_size)
 
     def _copy_data(self, source, provider, executor):
         self._logger.debug("CSV Schema found: %s", source.schema_path)
@@ -470,41 +541,18 @@ class SireneImporter:
     def _copy_first_entry(self, zipdata, provider, executor):
         f = zipdata.filelist[0]
         data_stream = zipdata.open(f)
-        first_lines = [data_stream.readline() for _ in range(3)]
+        first_lines = [list(enumerate(data_stream.readline().strip().decode(
+            "utf-8").split(","), 1)) for _ in range(3)]
         self._logger.debug("First lines are: %s", first_lines)
         data_stream.seek(0)
         executor.execute_all(provider.copy(), stream=data_stream)
 
 
-def import_sirene(sirene_path: Path, *args,
-                  create_extra_indices: Callable[
-                      [str], Iterable[
-                          SQLIndex]] = default_create_extra_indices,
-                  force_text: Callable[
-                      [Tuple[str, str]], bool] = default_force_text,
-                  **kwargs):
-    """
-    :param sirene_path: path to data and schemas
-    :param args: a connection or noting
-    :param create_extra_indices: a function `table name -> indices`.
-                                 use this function to create indices
-    :param force_text: a function `table name, field name -> bool`
-                                 use this function to fix a schema
-    :param kwargs:
-            dry_run: If true, only log the queries
-    """
-    logger = logging.getLogger("sirene2pg")
-    importer = SireneImporter(logger, data_sources(sirene_path),
-                              create_extra_indices, force_text)
-    if kwargs.get('dry_run', False):
-        importer.execute(DryRunQueryExecutor(logger))
-    else:
-        importer.execute(NormalQueryExecutor(logger, args[0]))
-
-
 ########
 # MISC #
 ########
+
+
 def split_on_cat(text: str,
                  dont_split: Optional[
                      Iterable[Tuple[Optional[str], Optional[str]]]] = None
@@ -568,6 +616,35 @@ def to_snake(text: str) -> str:
     :return: the snake case text
     """
     return '_'.join(split_on_cat(text)).lower()
+
+
+def import_sirene(sirene_path: Path, *args,
+                  type_provider: SQLTypeProvider = PatchedSQLTypeProvider(
+                      SQL_TYPE_BY_SIREN_TYPE),
+                  index_provider: SQLIndexProvider = SireSQLIndexProvider(
+                      SQLIndex('StockEtablissement',
+                               "codePostalEtablissement",
+                               SQLIndexType.B_TREE)),
+                  process_names: Optional[Callable[[str], str]] = to_snake,
+                  dry_run: bool = False):
+    """
+    :param sirene_path: path to data and schemas
+    :param type_provider: a provider for sql types
+    :param args: a connection or nothing
+    :param index_provider: a provider for indices
+    :param process_names: a function to process field and table names
+    :param dry_run: If true, only log the queries
+    """
+    logger = logging.getLogger("sirene2pg")
+    if process_names is None:
+        def process_names(n: str) -> str: return n
+
+    importer = SireneImporter(logger, data_sources(sirene_path), type_provider,
+                              index_provider, process_names)
+    if dry_run:
+        importer.execute(DryRunQueryExecutor(logger))
+    else:
+        importer.execute(NormalQueryExecutor(logger, args[0]))
 
 
 ########

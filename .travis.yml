@@ -1,0 +1,30 @@
+# py4lo
+language: python
+
+python:
+  - "3.7"
+
+cache: pip
+
+before_install:
+  - export PYTHONPATH=${PYTHONPATH}:/usr/lib/python3/dist-packages/
+
+# command to run tests and install dependencies
+install:
+  - pip install --upgrade pip
+  - pip install --upgrade pytest py codecov pytest-cov flake8
+  - pytest --version # pytest-cov
+
+  # dependencies
+  - pip install -r requirements.txt
+
+
+# script
+script:
+  - "flake8 ."
+  - "pytest --cov=import_sirene"
+  - "pytest --cov-report --cov-append --doctest-modules import_sirene.py --cov=import_sirene"
+
+
+after_success:
+  - codecov
