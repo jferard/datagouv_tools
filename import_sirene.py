@@ -67,8 +67,9 @@ class SQLField:
                         self.comment, self.length)
 
     def __lt__(self, other):
-        return (self.table_name < other.table_name
-                or self.rank < other.rank)
+        if self.table_name != other.table_name:
+            raise ValueError("field from different tables are not comparable")
+        return self.rank < other.rank
 
 
 class SQLIndexType(Enum):
@@ -167,15 +168,20 @@ class PostgreSQLQueryProvider(QueryProvider):
         lines = ['CREATE TABLE {} ('.format(self._table_name)]
         for field in self._fields[:-1]:
             lines.append(self._create_line(field, ','))
-        field = self._fields[-1]
-        lines.append(self._create_line(field, ' '))
+        if self._fields:
+            field = self._fields[-1]
+            lines.append(self._create_line(field, ' '))
         lines.append(")")
         return "\n".join(lines)
 
     def _create_line(self, field: SQLField, comma: str):
-        return "    {} {} -- {}".format(self._field_name(field),
-                                        self._type(field, comma),
-                                        field.comment)
+        if field.comment:
+            return "    {} {} -- {}".format(self._field_name(field),
+                                            self._type(field, comma),
+                                            field.comment)
+        else:
+            return "    {} {}".format(self._field_name(field),
+                                      self._type(field, comma.strip()))
 
     def _field_name(self, field: SQLField) -> str:
         return field.field_name.ljust(self._name_width)
@@ -583,7 +589,7 @@ def split_on_cat(text: str,
     """
     import unicodedata
     if dont_split is None:
-        dont_split = (("Lu", "Ll"),)
+        dont_split = (("Lu", "Ll"), (None, "Pc"), ("Pc", None))
 
     def split_between(lc, c):
         for ds_lc, ds_c in dont_split:
@@ -611,6 +617,11 @@ def to_snake(text: str) -> str:
     'lorem_ipsum'
     >>> to_snake("Lorem2Ipsum")
     'lorem_2_ipsum'
+
+    `to_snake` is idempotent:
+
+    >>> to_snake(to_snake("LoremIpsum"))
+    'lorem_ipsum'
 
     :param text: the camel case text
     :return: the snake case text
