@@ -1,4 +1,4 @@
-Sirene2pg. An utility to import the SIRENE database to PostgreSQL
+DataGouv Tools. An utility to import  some data.gouv.fr data to PostgreSQL and other DBMS.
      Copyright (C) 2020 J. Férard <https://github.com/jferard>
 
 License: GPL v3

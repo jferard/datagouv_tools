@@ -1,22 +1,22 @@
 # coding: utf-8
 
-#   Sirene2pg. An utility to import the SIRENE database to PostgreSQL
+#   DataGouv Tools. An utility to import  some data.gouv.fr data to PostgreSQL and other DBMS.
 #       Copyright (C) 2020 J. Férard <https://github.com/jferard>
 #
-#   This file is part of Sirene2pg.
+#   This file is part of DataGouv Tools.
 #
-#  Sirene2pg is free software: you can redistribute it and/or modify it under
+#  DataGouv Tools is free software: you can redistribute it and/or modify it under
 #  the terms of the GNU General Public License as published by the Free
 #  Software Foundation, either version 3 of the License, or (at your option)
 #  any later version.
 #
-#  Sirene2pg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  DataGouv Tools is distributed in the hope that it will be useful, but WITHOUT ANY
 #  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 #  FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 #  details. You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
-#   This file is part of Sirene2pg.
+#   This file is part of DataGouv Tools.
 
 """
 A small utility to import the SIRENE database
@@ -125,8 +125,9 @@ class QueryProvider:
         pass
 
     @abstractmethod
-    def copy(self) -> Iterable[str]:
+    def copy(self, path: Path) -> Iterable[str]:
         """
+        :param path: the source path (zipped)
         :return: a list of queries to perform a copy
         """
         pass
@@ -193,7 +194,8 @@ class PostgreSQLQueryProvider(QueryProvider):
     def prepare_copy(self) -> Iterable[str]:
         return 'TRUNCATE {}'.format(self._table_name),
 
-    def copy(self) -> Iterable[str]:
+    def copy(self, path) -> Iterable[str]:
+
         return "COPY {} FROM STDIN CSV HEADER " \
                "DELIMITER ',' ENCODING 'UTF-8'".format(self._table_name),
 
@@ -208,6 +210,147 @@ class PostgreSQLQueryProvider(QueryProvider):
                                                   table=index.table_name,
                                                   idx_type=index.type.value,
                                                   field=index.field_name)
+
+
+class SQLiteSQLQueryProvider(QueryProvider):
+    """
+    A provider for PostgreSQL queries.
+    """
+
+    def __init__(self, table_name: str, fields: Sequence[SQLField],
+                 indices: Iterable[SQLIndex], sql_type_width: int,
+                 name_width: int):
+        """
+        :param table_name: *processed* name of the table
+        :param fields: fields with *processed* names
+        :param indices: indices with *processed* names
+        :param sql_type_width: argument to rjust
+        :param name_width: argument to rjust
+        """
+        self._table_name = table_name
+        self._fields = fields
+        self._indices = indices
+        self._sql_type_width = sql_type_width
+        self._name_width = name_width
+
+    def create_table(self) -> Iterable[str]:
+        return 'DROP TABLE IF EXISTS {}'.format(
+            self._table_name), self._create()
+
+    def _create(self) -> str:
+        lines = ['CREATE TABLE {} ('.format(self._table_name)]
+        for field in self._fields[:-1]:
+            lines.append(self._create_line(field, ','))
+        if self._fields:
+            field = self._fields[-1]
+            lines.append(self._create_line(field, ' '))
+        lines.append(")")
+        return "\n".join(lines)
+
+    def _create_line(self, field: SQLField, comma: str):
+        if field.comment:
+            return "    {} {} -- {}".format(self._field_name(field),
+                                            self._type(field, comma),
+                                            field.comment)
+        else:
+            return "    {} {}".format(self._field_name(field),
+                                      self._type(field, comma.strip()))
+
+    def _field_name(self, field: SQLField) -> str:
+        return field.field_name.ljust(self._name_width)
+
+    def _type(self, field: SQLField, comma=','):
+        return (field.type.value + comma).ljust(
+            self._sql_type_width + len(comma))
+
+    def prepare_copy(self) -> Iterable[str]:
+        return ()
+
+    def copy(self, path) -> Iterable[str]:
+        """con.executemany("insert into person(firstname, lastname) values (?,?)",
+                        persons)"""
+        return ()
+
+    def finalize_copy(self) -> Iterable[str]:
+        return tuple(self._add_index(index) for index in self._indices)
+
+    @staticmethod
+    def _add_index(index: SQLIndex) -> str:
+        return 'CREATE INDEX {idx_name} ON {table}({field})'.format(
+            idx_name=index.name,
+            table=index.table_name,
+            field=index.field_name)
+
+
+class MariaDBSQLQueryProvider(QueryProvider):
+    """
+    A provider for PostgreSQL queries.
+    """
+
+    def __init__(self, table_name: str, fields: Sequence[SQLField],
+                 indices: Iterable[SQLIndex], sql_type_width: int,
+                 name_width: int):
+        """
+        :param table_name: *processed* name of the table
+        :param fields: fields with *processed* names
+        :param indices: indices with *processed* names
+        :param sql_type_width: argument to rjust
+        :param name_width: argument to rjust
+        """
+        self._table_name = table_name
+        self._fields = fields
+        self._indices = indices
+        self._sql_type_width = sql_type_width
+        self._name_width = name_width
+
+    def create_table(self) -> Iterable[str]:
+        return 'DROP TABLE IF EXISTS {}'.format(
+            self._table_name), self._create()
+
+    def _create(self) -> str:
+        lines = ['CREATE TABLE {} ('.format(self._table_name)]
+        for field in self._fields[:-1]:
+            lines.append(self._create_line(field, ','))
+        if self._fields:
+            field = self._fields[-1]
+            lines.append(self._create_line(field, ' '))
+        lines.append(")")
+        return "\n".join(lines)
+
+    def _create_line(self, field: SQLField, comma: str):
+        if field.comment:
+            return "    {} {} -- {}".format(self._field_name(field),
+                                            self._type(field, comma),
+                                            field.comment)
+        else:
+            return "    {} {}".format(self._field_name(field),
+                                      self._type(field, comma.strip()))
+
+    def _field_name(self, field: SQLField) -> str:
+        return field.field_name.ljust(self._name_width)
+
+    def _type(self, field: SQLField, comma=','):
+        return (field.type.value + comma).ljust(
+            self._sql_type_width + len(comma))
+
+    def prepare_copy(self) -> Iterable[str]:
+        return ()
+
+    def copy(self, path) -> Iterable[str]:
+        return "LOAD DATA LOCAL INFILE '{}' INTO TABLE {} " \
+               "FIELDS TERMINATED BY ',' " \
+               "CHARACTER SET 'UTF-8'".format(path, self._table_name),
+
+    def finalize_copy(self) -> Iterable[str]:
+        return tuple(self._add_index(index) for index in self._indices)
+
+    @staticmethod
+    def _add_index(index: SQLIndex) -> str:
+        return 'CREATE INDEX {idx_name} ON {table}({field})' \
+               'USING {idx_type}'.format(idx_name=index.name,
+                                         table=index.table_name,
+                                         idx_type=index.type.value,
+                                         field=index.field_name)
 
 
 class QueryExecutor(ABC):
@@ -238,12 +381,12 @@ class NormalQueryExecutor(QueryExecutor):
         self._logger = logger
         self._connection = connection
 
-    def execute_all(self, operations: Iterable[str], args=None, stream=None):
+    def execute_all(self, operations: Iterable[str], *args, **kwargs):
         cursor = self._connection.cursor()
         for sql in operations:
             self._logger.debug("Execute: %s (args=%s, stream=%s)", sql, args,
-                               stream)
-            cursor.execute(sql, args, stream)
+                               kwargs)
+            cursor.execute(sql, *args, **kwargs)
 
     def commit(self):
         self._logger.debug("Commit")
@@ -286,7 +429,7 @@ class Source:
     A SIRENE source
     """
     table_name: str
-    data_path: Path
+    zipped_data_path: Path
     schema_path: Path
 
 
@@ -413,7 +556,7 @@ def data_sources(sirene_path: Path) -> Iterator[Source]:
 # SIRENE - POSTGRES: the glue between SIRENE and Postgres #
 ###########################################################
 
-SQL_TYPE_BY_SIREN_TYPE = {
+POSTGRE_SQL_TYPE_BY_SIREN_TYPE = {
     "Liste de codes": SQLType.TEXT,
     "Date": SQLType.DATE,
     "Texte": SQLType.TEXT,
@@ -421,7 +564,7 @@ SQL_TYPE_BY_SIREN_TYPE = {
 }
 
 
-class PatchedSQLTypeProvider(SQLTypeProvider):
+class PatchedPostgreSQLTypeProvider(SQLTypeProvider):
     def __init__(self, sql_type_by_sirene_type: Mapping[str, SQLType]):
         """
         :param sql_type_by_sirene_type: the default mapping
@@ -471,6 +614,9 @@ class SireneImporter:
     def __init__(self, logger: logging.Logger, sources: Iterable[Source],
                  type_provider: SQLTypeProvider,
                  index_provider: SQLIndexProvider,
+                 query_provider_factory: Callable[[str, Sequence[SQLField],
+                                                   Iterable[SQLIndex], int,
+                                                   int], QueryProvider],
                  process_names: Callable[[str], str]):
         """
         :param logger: the logger
@@ -484,6 +630,7 @@ class SireneImporter:
         self._sources = sources
         self._type_provider = type_provider
         self._index_provider = index_provider
+        self._query_provider_factory = query_provider_factory
         self._process_names = process_names
 
     def execute(self, executor: QueryExecutor):
@@ -503,7 +650,7 @@ class SireneImporter:
 
             self._copy_data(source, provider, executor)
 
-    def _create_schema_parser(self, source) -> SireneSchemaParser:
+    def _create_schema_parser(self, source: Source) -> SireneSchemaParser:
         with open(source.schema_path, 'r', encoding='utf-8') as schema:
             reader = csv.DictReader(schema)
             parser = SireneSchemaParser(source.table_name, reader,
@@ -526,32 +673,40 @@ class SireneImporter:
                    schema_parser.get_indices()]
         sql_type_max_size = max(len(f.type.value) for f in fields)
         name_max_size = max(len(f.field_name) for f in fields)
-        return PostgreSQLQueryProvider(table_name, fields,
-                                       indices,
-                                       sql_type_max_size,
-                                       name_max_size)
+        return self._query_provider_factory(table_name, fields,
+                                            indices,
+                                            sql_type_max_size,
+                                            name_max_size)
 
-    def _copy_data(self, source, provider, executor):
+    def _copy_data(self, source: Source, provider: QueryProvider,
+                   executor: QueryExecutor):
         self._logger.debug("CSV Schema found: %s", source.schema_path)
         self._logger.debug("Create table schema: %s", source.table_name)
         executor.execute_all(provider.create_table())
         self._logger.debug("Prepare copy: %s", source.table_name)
         executor.execute_all(provider.prepare_copy())
-        self._logger.debug("Import data from file: %s", source.data_path)
-        with zipfile.ZipFile(source.data_path, 'r') as zipdata:
-            self._copy_first_entry(zipdata, provider, executor)
+        self._logger.debug("Import data from file: %s",
+                           source.zipped_data_path)
+        self._copy_from_zipped_file(source.zipped_data_path, provider, executor)
         self._logger.debug("After copy: %s", source.table_name)
         executor.execute_all(provider.finalize_copy())
         executor.commit()
 
-    def _copy_first_entry(self, zipdata, provider, executor):
+    def _copy_from_zipped_file(self, zipped_path: Path, provider: QueryProvider,
+                               executor: QueryExecutor):
+        # TODO: copier (PgCopier, MariaDBCopier, SqliteCopier)
+        with zipfile.ZipFile(zipped_path, 'r') as zipdata:
+            data_stream = self._get_stream(zipdata)
+            executor.execute_all(provider.copy(zipped_path), stream=data_stream)
+
+    def _get_stream(self, zipdata):
         f = zipdata.filelist[0]
         data_stream = zipdata.open(f)
         first_lines = [list(enumerate(data_stream.readline().strip().decode(
             "utf-8").split(","), 1)) for _ in range(3)]
         self._logger.debug("First lines are: %s", first_lines)
         data_stream.seek(0)
-        executor.execute_all(provider.copy(), stream=data_stream)
+        return data_stream
 
 
 ########
@@ -630,12 +785,16 @@ def to_snake(text: str) -> str:
 
 
 def import_sirene(sirene_path: Path, *args,
-                  type_provider: SQLTypeProvider = PatchedSQLTypeProvider(
-                      SQL_TYPE_BY_SIREN_TYPE),
+                  type_provider: SQLTypeProvider = PatchedPostgreSQLTypeProvider(
+                      POSTGRE_SQL_TYPE_BY_SIREN_TYPE),
                   index_provider: SQLIndexProvider = SireSQLIndexProvider(
                       SQLIndex('StockEtablissement',
                                "codePostalEtablissement",
                                SQLIndexType.B_TREE)),
+                  query_provider_factory: Callable[[str, Sequence[SQLField],
+                                                    Iterable[SQLIndex], int,
+                                                    int], QueryProvider
+                  ] = PostgreSQLQueryProvider,
                   process_names: Optional[Callable[[str], str]] = to_snake,
                   dry_run: bool = False):
     """
@@ -647,11 +806,18 @@ def import_sirene(sirene_path: Path, *args,
     :param dry_run: If true, only log the queries
     """
     logger = logging.getLogger("sirene2pg")
+    logger.debug("Import data with following parameters:"
+                 "sirene_path: %s, type_provider: %s, index_provider: %s,"
+                 "query_provider_factory: %s, process_names: %s, "
+                 "dry_run: %s", sirene_path, type_provider, index_provider,
+                 query_provider_factory, process_names, dry_run)
+
     if process_names is None:
         def process_names(n: str) -> str: return n
 
     importer = SireneImporter(logger, data_sources(sirene_path), type_provider,
-                              index_provider, process_names)
+                              index_provider, query_provider_factory,
+                              process_names)
     if dry_run:
         importer.execute(DryRunQueryExecutor(logger))
     else:

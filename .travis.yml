@@ -16,7 +16,7 @@ install:
   - pytest --version # pytest-cov
 
   # dependencies
-  - pip install -r requirements.txt
+  - python setup.py test
 
 
 # script
@@ -24,7 +24,6 @@ script:
   - "flake8 ."
   - "pytest --cov-report term-missing --cov=import_sirene"
   - "pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene"
-
 
 after_success:
   - codecov

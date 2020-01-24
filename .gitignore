@@ -3,3 +3,6 @@ __pycache__
 .idea
 *.pyc
 .coverage
+.eggs
+*.egg-info
+*.db

@@ -1,16 +1,16 @@
 # coding: utf-8
 
-#   Sirene2pg. An utility to import the SIRENE database to PostgreSQL
+#   DataGouv Tools. An utility to import  some data.gouv.fr data to PostgreSQL and other DBMS.
 #       Copyright (C) 2020 J. Férard <https://github.com/jferard>
 #
-#   This file is part of Sirene2pg.
+#   This file is part of DataGouv Tools.
 #
-#  Sirene2pg is free software: you can redistribute it and/or modify it under
+#  DataGouv Tools is free software: you can redistribute it and/or modify it under
 #  the terms of the GNU General Public License as published by the Free
 #  Software Foundation, either version 3 of the License, or (at your option)
 #  any later version.
 #
-#  Sirene2pg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  DataGouv Tools is distributed in the hope that it will be useful, but WITHOUT ANY
 #  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 #  FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 #  details. You should have received a copy of the GNU General Public License
@@ -23,24 +23,60 @@ from logging import Logger
 from pathlib import Path
 from unittest.mock import Mock, call
 
+import mysql.connector as mariadb
 import pg8000
 from pg8000 import Connection
+import sqlite3
 
-from import_sirene import import_sirene, SQLIndex, SireSQLIndexProvider, \
-    SQLIndexType, SQLField, SQLType, to_snake, PostgreSQLQueryProvider, \
-    NormalQueryExecutor, DryRunQueryExecutor, BasicSQLTypeProvider, \
-    SQL_TYPE_BY_SIREN_TYPE, SireneSchemaParser, NAME, TYPE, LENGTH, RANK, \
-    CAPTION
+from datagouv_tools.import_sirene import (import_sirene, SQLIndex, SireSQLIndexProvider,
+                                          SQLIndexType, SQLField, SQLType, to_snake,
+                                          PostgreSQLQueryProvider,
+                                          NormalQueryExecutor, DryRunQueryExecutor,
+                                          BasicSQLTypeProvider,
+                                          POSTGRE_SQL_TYPE_BY_SIREN_TYPE, SireneSchemaParser,
+                                          NAME, TYPE, LENGTH,
+                                          RANK,
+                                          CAPTION, PatchedPostgreSQLTypeProvider,
+                                          SQLiteSQLQueryProvider)
 
 
 class ImportSireneTest(unittest.TestCase):
     @unittest.skip("intregation test")
-    def test(self):
+    def test_postgres(self):
         path = Path(r"/home/jferard/SIRENE")
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
         try:
             import_sirene(path, connection)
+        finally:
+            connection.commit()
+            connection.close()
+
+    @unittest.skip("intregation test")
+    def test_maria(self):
+        path = Path(r"/home/jferard/SIRENE")
+        connection = mariadb.connect(user="sirene", password="yourpass",
+                                     database="sirene")
+        try:
+            import_sirene(path, connection)
+        finally:
+            connection.commit()
+            connection.close()
+
+    def test_sqlite(self):
+        path = Path(r"/home/jferard/SIRENE")
+        connection = sqlite3.connect('sirene.db')
+        try:
+            type_provider = PatchedPostgreSQLTypeProvider(
+                POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
+            index_provider = SireSQLIndexProvider(
+                SQLIndex('StockEtablissement',
+                         "codePostalEtablissement",
+                         SQLIndexType.B_TREE))
+            query_provider_factory = SQLiteSQLQueryProvider
+            import_sirene(path, connection, type_provider=type_provider,
+                          index_provider=index_provider,
+                          query_provider_factory=query_provider_factory)
         finally:
             connection.commit()
             connection.close()
@@ -132,7 +168,7 @@ class TestQueryProvider(unittest.TestCase):
         self.assertEqual(('TRUNCATE t',), provider.prepare_copy())
         self.assertEqual(("COPY t FROM STDIN CSV "
                           "HEADER DELIMITER ',' ENCODING 'UTF-8'",),
-                         provider.copy())
+                         provider.copy(zipped_path))
         self.assertEqual(('ANALYZE t',), provider.finalize_copy())
 
     def test_one(self):
@@ -204,7 +240,8 @@ class QueryExecutorTest(unittest.TestCase):
 
 class ParserTest(unittest.TestCase):
     def setUp(self):
-        self.type_provider = BasicSQLTypeProvider(SQL_TYPE_BY_SIREN_TYPE)
+        self.type_provider = BasicSQLTypeProvider(
+            POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
         self.index_provider = SireSQLIndexProvider()
 
     def test_empty(self):
