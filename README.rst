@@ -49,6 +49,31 @@ And to run your script as sytem `sirene` user.
     ...$ sudo -u sirene venv/bin/python3.7 -m unittest import_sirene_test.py
 
 
+.. code:: bash
+
+    ...$ sudo mariadb
+    [sudo] Mot de passe de jferard :
+    Welcome to the MariaDB monitor.  Commands end with ; or \g.
+    Your MariaDB connection id is 32
+    Server version: 10.1.43-MariaDB-0ubuntu0.18.04.1 Ubuntu 18.04
+
+    Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+    Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+    MariaDB [(none)]> CREATE DATABASE `sirene`;
+    Query OK, 1 row affected (0.01 sec)
+
+    MariaDB [(none)]> CREATE USER 'sirene'@localhost IDENTIFIED BY 'yourpass';
+    Query OK, 0 rows affected (0.01 sec)
+
+    MariaDB [(none)]> GRANT ALL privileges ON `sirene`.* TO 'sirene'@localhost;
+    Query OK, 0 rows affected (0.00 sec)
+
+    MariaDB [sirene]> GRANT FILE ON *.* TO 'sirene'@'localhost';
+    Query OK, 0 rows affected (0.01 sec)
+
+
 Testing
 ~~~~~~~
 If needed:

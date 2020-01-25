@@ -17,7 +17,8 @@
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # import SIRENE to PostgreSQL
-
+import csv
+import sqlite3
 import unittest
 from logging import Logger
 from pathlib import Path
@@ -26,18 +27,22 @@ from unittest.mock import Mock, call
 import mysql.connector as mariadb
 import pg8000
 from pg8000 import Connection
-import sqlite3
 
-from datagouv_tools.import_sirene import (import_sirene, SQLIndex, SireSQLIndexProvider,
-                                          SQLIndexType, SQLField, SQLType, to_snake,
-                                          PostgreSQLQueryProvider,
-                                          NormalQueryExecutor, DryRunQueryExecutor,
-                                          BasicSQLTypeProvider,
-                                          POSTGRE_SQL_TYPE_BY_SIREN_TYPE, SireneSchemaParser,
+from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
+                                          to_snake,
+                                          NormalQueryExecutor,
+                                          DryRunQueryExecutor,
+                                          BasicSireneTypeToSQLTypeConverter,
+                                          POSTGRE_SQL_TYPE_BY_SIREN_TYPE,
+                                          SireneSchemaParser,
                                           NAME, TYPE, LENGTH,
                                           RANK,
-                                          CAPTION, PatchedPostgreSQLTypeProvider,
-                                          SQLiteSQLQueryProvider)
+                                          CAPTION,
+                                          PatchedPostgreSireneTypeToSQLTypeConverter,
+                                          import_sirene)
+from datagouv_tools.sql.generic import SQLField, SQLIndex
+from datagouv_tools.sql.postgresql import (PostgreSQLType, PostgreSQLIndexType,
+                                           PostgreSQLQueryProvider)
 
 
 class ImportSireneTest(unittest.TestCase):
@@ -47,7 +52,17 @@ class ImportSireneTest(unittest.TestCase):
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
         try:
-            import_sirene(path, connection)
+            import_sirene(path, connection, "postgresql")
+        finally:
+            connection.commit()
+            connection.close()
+
+    @unittest.skip("intregation test")
+    def test_sqlite(self):
+        path = Path(r"/home/jferard/SIRENE")
+        connection = sqlite3.connect('sirene.db')
+        try:
+            import_sirene(path, connection, "sqlite")
         finally:
             connection.commit()
             connection.close()
@@ -58,153 +73,147 @@ class ImportSireneTest(unittest.TestCase):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
         try:
-            import_sirene(path, connection)
+            import_sirene(path, connection, "mariadb")
         finally:
             connection.commit()
             connection.close()
 
-    def test_sqlite(self):
-        path = Path(r"/home/jferard/SIRENE")
-        connection = sqlite3.connect('sirene.db')
-        try:
-            type_provider = PatchedPostgreSQLTypeProvider(
-                POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
-            index_provider = SireSQLIndexProvider(
-                SQLIndex('StockEtablissement',
-                         "codePostalEtablissement",
-                         SQLIndexType.B_TREE))
-            query_provider_factory = SQLiteSQLQueryProvider
-            import_sirene(path, connection, type_provider=type_provider,
-                          index_provider=index_provider,
-                          query_provider_factory=query_provider_factory)
-        finally:
-            connection.commit()
-            connection.close()
-
-    @unittest.skip("intregation test")
     def test_dry_run(self):
         path = Path(r"/home/jferard/SIRENE")
-        import_sirene(path, dry_run=True)
+        import_sirene(path, None, "postgresql")
 
 
 class IndexProviderTest(unittest.TestCase):
     def setUp(self):
-        self.provider = SireSQLIndexProvider(
-            SQLIndex('tableName', 'fieldName', SQLIndexType.B_TREE))
+        self.provider = SireneSQLIndexProvider(
+            SQLIndex('tableName', 'fieldName', PostgreSQLIndexType.B_TREE))
 
     def test_index_provider_with_extra(self):
         self.assertEqual([SQLIndex(table_name='tableName',
                                    field_name='siren',
-                                   type=SQLIndexType.HASH),
+                                   type=PostgreSQLIndexType.HASH),
                           SQLIndex(table_name='tableName',
                                    field_name='fieldName',
-                                   type=SQLIndexType.B_TREE)],
+                                   type=PostgreSQLIndexType.B_TREE)],
                          list(self.provider.get_indices(
                              [SQLField("tableName", "fieldName",
-                                       SQLType.TEXT),
+                                       PostgreSQLType.TEXT),
                               SQLField("tableName", "siren",
-                                       SQLType.TEXT),
+                                       PostgreSQLType.TEXT),
                               SQLField("tableName", "other",
-                                       SQLType.TEXT)
+                                       PostgreSQLType.TEXT)
                               ])))
 
     def test_index_provider(self):
         self.assertEqual([SQLIndex(table_name='tableName2',
                                    field_name='siren',
-                                   type=SQLIndexType.HASH)],
+                                   type=PostgreSQLIndexType.HASH)],
                          list(self.provider.get_indices(
                              [SQLField("tableName2", "fieldName",
-                                       SQLType.TEXT),
+                                       PostgreSQLType.TEXT),
                               SQLField("tableName2", "siren",
-                                       SQLType.TEXT),
+                                       PostgreSQLType.TEXT),
                               SQLField("tableName2", "other",
-                                       SQLType.TEXT)
+                                       PostgreSQLType.TEXT)
                               ])))
 
 
 class SQLFieldTest(unittest.TestCase):
     def test_sort(self):
         self.assertEqual(
-            [SQLField("t", "f1", SQLType.TEXT, 1),
-             SQLField("t", "f2", SQLType.TEXT, 2),
-             SQLField("t", "f3", SQLType.TEXT, 3)],
+            [SQLField("t", "f1", PostgreSQLType.TEXT, 1),
+             SQLField("t", "f2", PostgreSQLType.TEXT, 2),
+             SQLField("t", "f3", PostgreSQLType.TEXT, 3)],
             list(sorted([
-                SQLField("t", "f3", SQLType.TEXT, 3),
-                SQLField("t", "f1", SQLType.TEXT, 1),
-                SQLField("t", "f2", SQLType.TEXT, 2)
+                SQLField("t", "f3", PostgreSQLType.TEXT, 3),
+                SQLField("t", "f1", PostgreSQLType.TEXT, 1),
+                SQLField("t", "f2", PostgreSQLType.TEXT, 2)
             ])))
 
     def test_compare(self):
         with self.assertRaises(ValueError):
-            SQLField("t1", "f1", SQLType.TEXT, 1) < SQLField("t2", "f2",
-                                                             SQLType.TEXT, 1)
+            SQLField("t1", "f1", PostgreSQLType.TEXT, 1) < SQLField("t2", "f2",
+                                                                    PostgreSQLType.TEXT,
+                                                                    1)
         self.assertTrue(
-            SQLField("t", "f1", SQLType.TEXT, 1) < SQLField("t", "f2",
-                                                            SQLType.TEXT, 2))
+            SQLField("t", "f1", PostgreSQLType.TEXT, 1) < SQLField("t", "f2",
+                                                                   PostgreSQLType.TEXT,
+                                                                   2))
 
     def test_process(self):
-        f = SQLField("CamelCaseTable", "camelCaseField", SQLType.TEXT)
+        f = SQLField("CamelCaseTable", "camelCaseField", PostgreSQLType.TEXT)
         self.assertEqual(
-            SQLField('camel_case_table', 'camel_case_field', SQLType.TEXT),
+            SQLField('camel_case_table', 'camel_case_field',
+                     PostgreSQLType.TEXT),
             f.process(to_snake))
 
 
 class SQLIndexTest(unittest.TestCase):
     def test_process(self):
-        f = SQLIndex("CamelCaseTable", "camelCaseField", SQLIndexType.HASH)
+        f = SQLIndex("CamelCaseTable", "camelCaseField",
+                     PostgreSQLIndexType.HASH)
         self.assertEqual(
             SQLIndex('camel_case_table', 'camel_case_field',
-                     SQLIndexType.HASH),
+                     PostgreSQLIndexType.HASH),
             f.process(to_snake))
 
 
 class TestQueryProvider(unittest.TestCase):
-    def test_empty(self):
-        provider = PostgreSQLQueryProvider(
-            "t", [], [], 0, 0
-        )
-        self.assertEqual(('DROP TABLE IF EXISTS t', 'CREATE TABLE t (\n)'),
-                         provider.create_table())
-        self.assertEqual(('TRUNCATE t',), provider.prepare_copy())
-        self.assertEqual(("COPY t FROM STDIN CSV "
-                          "HEADER DELIMITER ',' ENCODING 'UTF-8'",),
-                         provider.copy(zipped_path))
-        self.assertEqual(('ANALYZE t',), provider.finalize_copy())
+    def setUp(self):
+        self.provider = PostgreSQLQueryProvider()
+        self.sql_field1 = SQLField("t", "f1", PostgreSQLType.TEXT,
+                                   comment="comment1")
+        self.sql_field2 = SQLField("t", "field_with_long_name2",
+                                   PostgreSQLType.NUMERIC)
+        self.sql_field3 = SQLField("t", "f3", PostgreSQLType.TEXT,
+                                   comment="comment2")
 
-    def test_one(self):
-        provider = PostgreSQLQueryProvider(
-            "t", [SQLField("t", "f", SQLType.TEXT)], [], 1, 10
-        )
-        self.assertEqual(('DROP TABLE IF EXISTS t',
-                          'CREATE TABLE t (\n    f          text\n)'),
-                         provider.create_table())
+    def test_drop(self):
+        self.assertEqual(('DROP TABLE IF EXISTS t',),
+                         self.provider.drop_table("t"))
 
-    def test_two(self):
-        provider = PostgreSQLQueryProvider(
-            "t", [SQLField("t", "f1", SQLType.TEXT, comment="comment1"),
-                  SQLField("t", "f2", SQLType.TEXT, comment="comment2")],
-            [], 2, 10)
-        self.assertEqual(('DROP TABLE IF EXISTS t',
-                          'CREATE TABLE t (\n'
-                          '    f1         text, -- comment1\n'
-                          '    f2         text  -- comment2\n'
-                          ')'),
-                         provider.create_table())
+    def test_create_empty(self):
+        self.assertEqual(('CREATE TABLE t ()',),
+                         self.provider.create_table("t", []))
+
+    def test_prepare_copy(self):
+        self.assertEqual(('TRUNCATE t',), self.provider.prepare_copy("t"))
+
+    def test_copy(self):
+        self.assertEqual(("COPY t FROM STDIN WITH "
+                          "(FORMAT CSV, HEADER TRUE, ENCODING 'UTF_8')",),
+                         self.provider.copy_stream("t", "utf-8", csv.excel))
+
+    def test_finalize_copy(self):
+        self.assertEqual(('ANALYZE t',), self.provider.finalize_copy("t"))
+
+    def test_create_one(self):
+        self.assertEqual(('CREATE TABLE t (\n'
+                          '    f1 text -- comment1\n'
+                          ')',),
+                         self.provider.create_table("t", [self.sql_field1]))
+
+    def test_create_three(self):
+        provider = PostgreSQLQueryProvider()
+        self.assertEqual(('CREATE TABLE t (\n'
+                          '    f1                    text,    -- comment1\n'
+                          '    field_with_long_name2 numeric,\n'
+                          '    f3                    text    -- comment2\n'
+                          ')',),
+                         provider.create_table("t", [self.sql_field1,
+                                                     self.sql_field2,
+                                                     self.sql_field3]))
 
     def test_one_with_index(self):
-        provider = PostgreSQLQueryProvider(
-            "t", [SQLField("t", "f", SQLType.TEXT)],
-            [SQLIndex("t", "f", SQLIndexType.HASH)], 1, 10
-        )
-        self.assertEqual(('DROP TABLE IF EXISTS t',
-                          'CREATE TABLE t (\n    f          text\n)'),
-                         provider.create_table())
-        self.assertEqual(
-            ('ANALYZE t', 'CREATE INDEX f_t_idx ON t USING hash(f)'),
-            provider.finalize_copy())
+        sql_index = SQLIndex("t", "f", PostgreSQLIndexType.HASH)
+        self.assertEqual(('CREATE INDEX f_t_idx ON t USING hash(f)',),
+                         self.provider.create_index("t", sql_index))
 
 
 class QueryExecutorTest(unittest.TestCase):
+    def setUp(self):
+        self.maxDiff = None
+
     def test_normal(self):
         logger: Logger = Mock()
         connection: Connection = Mock()
@@ -213,14 +222,16 @@ class QueryExecutorTest(unittest.TestCase):
         qe.commit()
 
         self.assertEqual(
-            [call.debug('Execute: %s (args=%s, stream=%s)', 'sql1', None, 's'),
-             call.debug('Execute: %s (args=%s, stream=%s)', 'sql2', None, 's'),
+            [call.debug('Execute: %s (args=%s, stream=%s)', 'sql1', (),
+                        {'stream': 's'}),
+             call.debug('Execute: %s (args=%s, stream=%s)', 'sql2', (),
+                        {'stream': 's'}),
              call.debug('Commit')],
             logger.mock_calls)
         self.assertEqual(
             [call.cursor(),
-             call.cursor().execute('sql1', None, 's'),
-             call.cursor().execute('sql2', None, 's'),
+             call.cursor().execute('sql1', stream='s'),
+             call.cursor().execute('sql2', stream='s'),
              call.commit()], connection.mock_calls)
 
     def test_dry(self):
@@ -240,9 +251,9 @@ class QueryExecutorTest(unittest.TestCase):
 
 class ParserTest(unittest.TestCase):
     def setUp(self):
-        self.type_provider = BasicSQLTypeProvider(
+        self.type_provider = BasicSireneTypeToSQLTypeConverter(
             POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
-        self.index_provider = SireSQLIndexProvider()
+        self.index_provider = SireneSQLIndexProvider()
 
     def test_empty(self):
         p = SireneSchemaParser("t", [], self.type_provider,
@@ -258,9 +269,10 @@ class ParserTest(unittest.TestCase):
                                self.type_provider,
                                self.index_provider)
         self.assertEqual("t", p.table_name)
-        self.assertEqual([SQLField('t', 'siren', SQLType.TEXT, 1, 'c', 10)],
-                         p.get_fields())
-        self.assertEqual([SQLIndex('t', 'siren', SQLIndexType.HASH)],
+        self.assertEqual(
+            [SQLField('t', 'siren', PostgreSQLType.TEXT, 1, 'c', 10)],
+            p.get_fields())
+        self.assertEqual([SQLIndex('t', 'siren', PostgreSQLIndexType.HASH)],
                          list(p.get_indices()))
 
 
