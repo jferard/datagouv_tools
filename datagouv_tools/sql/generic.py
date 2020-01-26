@@ -244,6 +244,7 @@ class QueryExecutor(ABC, Generic[F, IN]):
 
         self.copy_path(table_name, Path(temp_path), encoding, dialect,
                        count=count + 1)
+        os.remove(temp_path)
 
     def copy_all(self, table_name: str, field_count: int,
                  records: Iterable[Iterable[str]]):
@@ -266,7 +267,8 @@ class QueryExecutor(ABC, Generic[F, IN]):
 
 
 class FakeAttr:
-    def __init__(self, obj, item):
+    def __init__(self, logger, obj, item):
+        self._logger = logger
         self._obj = obj
         self._item = item
 
@@ -275,29 +277,31 @@ class FakeAttr:
             map(str, args),
             (f"{k}={v}" for k, v in kwargs.items())
         ))
-        print(f"Call {self._obj}.{self._item}({arg_str})")
+        self._logger.info(f"DRY RUN: {self._obj}.{self._item}({arg_str})")
 
 
 class FakeCursor:
-    def __init__(self, connection):
+    def __init__(self, logger, connection):
+        self._logger = logger
         self._connection = connection
 
     def __getattr__(self, item):
-        return FakeAttr(self, item)
+        return FakeAttr(self._logger, self, item)
 
     def __repr__(self):
         return "cursor"
 
 
 class FakeConnection:
-    def __init__(self):
-        self._cursor = FakeCursor(self)
+    def __init__(self, logger):
+        self._logger = logger
+        self._cursor = FakeCursor(logger, self)
 
     def cursor(self):
         return self._cursor
 
     def __getattr__(self, item):
-        return FakeAttr(self, item)
+        return FakeAttr(self._logger, self, item)
 
     def __repr__(self):
         return "connection"

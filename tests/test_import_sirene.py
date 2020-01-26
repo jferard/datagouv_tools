@@ -33,12 +33,11 @@ from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
                                           NormalQueryExecutor,
                                           DryRunQueryExecutor,
                                           BasicSireneTypeToSQLTypeConverter,
-                                          POSTGRE_SQL_TYPE_BY_SIREN_TYPE,
+                                          POSTGRESQL_TYPE_BY_SIREN_TYPE,
                                           SireneSchemaParser,
                                           NAME, TYPE, LENGTH,
                                           RANK,
                                           CAPTION,
-                                          PatchedPostgreSireneTypeToSQLTypeConverter,
                                           import_sirene)
 from datagouv_tools.sql.generic import SQLField, SQLIndex
 from datagouv_tools.sql.postgresql import (PostgreSQLType, PostgreSQLIndexType,
@@ -46,41 +45,40 @@ from datagouv_tools.sql.postgresql import (PostgreSQLType, PostgreSQLIndexType,
 
 
 class ImportSireneTest(unittest.TestCase):
+    def setUp(self):
+        self.path = Path(r"/home/jferard/datagouv/sirene")
+
     @unittest.skip("intregation test")
     def test_postgres(self):
-        path = Path(r"/home/jferard/SIRENE")
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
         try:
-            import_sirene(path, connection, "postgresql")
+            import_sirene(self.path, connection, "postgresql")
         finally:
             connection.commit()
             connection.close()
 
     @unittest.skip("intregation test")
     def test_sqlite(self):
-        path = Path(r"/home/jferard/SIRENE")
         connection = sqlite3.connect('sirene.db')
         try:
-            import_sirene(path, connection, "sqlite")
+            import_sirene(self.path, connection, "sqlite")
         finally:
             connection.commit()
             connection.close()
 
     @unittest.skip("intregation test")
     def test_maria(self):
-        path = Path(r"/home/jferard/SIRENE")
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
         try:
-            import_sirene(path, connection, "mariadb")
+            import_sirene(self.path, connection, "mariadb")
         finally:
             connection.commit()
             connection.close()
 
     def test_dry_run(self):
-        path = Path(r"/home/jferard/SIRENE")
-        import_sirene(path, None, "postgresql")
+        import_sirene(self.path, None, "postgresql")
 
 
 class IndexProviderTest(unittest.TestCase):
@@ -252,7 +250,7 @@ class QueryExecutorTest(unittest.TestCase):
 class ParserTest(unittest.TestCase):
     def setUp(self):
         self.type_provider = BasicSireneTypeToSQLTypeConverter(
-            POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
+            POSTGRESQL_TYPE_BY_SIREN_TYPE)
         self.index_provider = SireneSQLIndexProvider()
 
     def test_empty(self):

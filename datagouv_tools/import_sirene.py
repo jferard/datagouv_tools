@@ -41,7 +41,7 @@ from datagouv_tools.sql.postgresql import (PostgreSQLType, PostgreSQLIndexType,
 from datagouv_tools.sql.sqlite import SQLiteQueryExecutor
 from datagouv_tools.util import to_snake
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s/%(filename)s/%(funcName)s/%(lineno)d - %(levelname)s: %(message)s")
 
 
 ###############################################################
@@ -209,7 +209,7 @@ class SireneSQLIndexProvider(SQLIndexProvider):
                 yield index
 
 
-POSTGRE_SQL_TYPE_BY_SIREN_TYPE = {
+POSTGRESQL_TYPE_BY_SIREN_TYPE = {
     "Liste de codes": PostgreSQLType.TEXT,
     "Date": PostgreSQLType.DATE,
     "Texte": PostgreSQLType.TEXT,
@@ -344,19 +344,21 @@ class SireneImporter:
 
 def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                   process_names: Optional[Callable[[str], str]] = to_snake):
+    assert sirene_path.exists()
+    logger = logging.getLogger("datagouv_tools")
+
     if connection is None:
-        connection = FakeConnection()
+        connection = FakeConnection(logger)
     if process_names is None:
         def process_names(name: str) -> str: return name
 
-    logger = logging.getLogger("datagouv_tools")
     logger.debug("Import data with following parameters:"
                  "sirene_path: %s, connection: %s, rdbms: %s", sirene_path,
                  connection, rdbms)
 
     if rdbms.casefold() == "postgresql":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
+            POSTGRESQL_TYPE_BY_SIREN_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
                      PostgreSQLIndexType.B_TREE))
@@ -364,7 +366,7 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                                                  PostgreSQLQueryProvider())
     elif rdbms.casefold() == "sqlite":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
+            POSTGRESQL_TYPE_BY_SIREN_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
                      PostgreSQLIndexType.B_TREE))
@@ -372,7 +374,7 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                                              QueryProvider())
     elif rdbms.casefold() == "mariadb":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRE_SQL_TYPE_BY_SIREN_TYPE)
+            POSTGRESQL_TYPE_BY_SIREN_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
                      PostgreSQLIndexType.B_TREE))
@@ -397,7 +399,7 @@ def _import_sirene(logger: logging.Logger, sirene_path: Path,
     """
 
     logger.debug("Import data with following parameters:"
-                 "sirene_path: %s, type_converter: %s, index_provider: %s,"
+                 "sirene_path: %s, type_converter: %s, index_provider: %s, "
                  "query_executor: %s, process_names: %s", sirene_path,
                  type_converter, index_provider,
                  query_executor, process_names)
