@@ -21,85 +21,73 @@ import os
 import shutil
 import tempfile
 from abc import ABC, abstractmethod
-from csv import Dialect
+from codecs import getreader
+from csv import reader as csv_reader, Dialect
 from dataclasses import dataclass
-from enum import Enum
 from io import BytesIO
-from itertools import chain
+from itertools import chain, islice
 from pathlib import Path
-from typing import Callable, Iterable, Generic, Sequence, TypeVar, Any, Mapping, \
-    BinaryIO
+from typing import (Callable, Iterable, Generic, TypeVar, Any, BinaryIO,
+                    Collection)
+
+from datagouv_tools.sql.sql_type import SQLType, SQLIndexType, SQLTypes
 
 U = TypeVar('U')
 
 
-class SQLType(ABC):
-    @abstractmethod
-    def type_str(self, params: Mapping[str, Any]) -> str:
-        """
-        :return: the representation of the type
-        """
-        pass
-
-
-T = TypeVar('T', bound=SQLType)
-
-
 @dataclass(eq=True)
-class SQLField(Generic[T]):
+class SQLField:
     """
     A SQL field
     """
     table_name: str  # original field name
     field_name: str
-    type: T
+    type: SQLType
     rank: int = 0
     comment: str = ""
     length: int = 0
-    type_params: Mapping[str, Any] = None
+    type_params: Iterable[Any] = None
 
     def __post_init__(self):
         if self.type_params is None:
-            self.type_params = {}
+            self.type_params = ()
 
-    def process(self, process_names: Callable[[str], str]) -> "SQLField[T]":
+    def process(self, process_names: Callable[[str], str]) -> "SQLField":
         return SQLField(process_names(self.table_name),
                         process_names(self.field_name), self.type, self.rank,
                         self.comment, self.length)
 
     @property
     def type_str(self):
-        return self.type.type_str(self.type_params)
+        return self.type.to_str(*self.type_params)
+
+    def type_value(self, value):
+        return self.type.type_value(value)
 
     def __lt__(self, other):
         if self.table_name != other.table_name:
             raise ValueError("field from different tables are not comparable")
         return self.rank < other.rank
 
+    def __repr__(self):
+        return (f"SQLField({self.table_name}, {self.field_name}, {self.type}, "
+                f"{self.rank}, {self.comment}, {self.length}, "
+                f"{self.type_params})")
+
 
 F = TypeVar('F', bound=SQLField)
 
 
-class SQLIndexType(ABC):
-    @property
-    @abstractmethod
-    def type_str(self):
-        pass
-
-
-IT = TypeVar('IT', bound=SQLIndexType)
-
-
 @dataclass(eq=True)
-class SQLIndex(Generic[IT]):
+class SQLIndex:
     """
     A SQL index
     """
     table_name: str
     field_name: str
-    type: IT
+    type: SQLIndexType
 
-    def process(self, process_names: Callable[[str], str]) -> "SQLIndex[IT]":
+    def process(self, process_names: Callable[[str], str]) -> "SQLIndex":
         return SQLIndex(process_names(self.table_name),
                         process_names(self.field_name), self.type)
 
@@ -112,32 +100,39 @@ class SQLIndex(Generic[IT]):
 
     @property
     def type_str(self) -> str:
-        return self.type.type_str
+        return self.type.to_str()
 
 
 IN = TypeVar('IN', bound=SQLIndex)
 
 
-class QueryProvider(ABC, Generic[F, IN]):
+@dataclass
+class SQLTable:
+    name: str
+    fields: Collection[SQLField]
+    indices: Iterable[SQLIndex]
+
+
+class QueryProvider(ABC):
     """
     A SQL query provider
     """
 
-    def drop_table(self, table_name: str) -> Iterable[str]:
-        return f'DROP TABLE IF EXISTS {table_name}',
+    def drop_table(self, table: SQLTable) -> Iterable[str]:
+        return f'DROP TABLE IF EXISTS {table.name}',
 
-    def create_table(self, table_name: str, fields: Iterable[F]
-                     ) -> Iterable[str]:
+    def create_table(self, table: SQLTable) -> Iterable[str]:
         """
         :return: a list of queries to create a table
         """
+        fields = list(table.fields)
         if not fields:
-            return f'CREATE TABLE {table_name} ()',
+            return f'CREATE TABLE {table.name} ()',
 
         sql_type_max_size = max(len(f.type_str) for f in fields)
         name_max_size = max(len(f.field_name) for f in fields)
 
-        lines = [f'CREATE TABLE {table_name} (']
+        lines = [f'CREATE TABLE {table.name} (']
         for field in fields[:-1]:
             lines.append(
                 self._create_line(field, name_max_size, sql_type_max_size, ','))
@@ -163,27 +158,28 @@ class QueryProvider(ABC, Generic[F, IN]):
         return (field.type_str + comma).ljust(
             width + len(comma))
 
-    def copy_all(self, table_name: str, field_count: int):
-        question_marks = ", ".join(["?"] * field_count)
-        return f'INSERT INTO {table_name} VALUES({question_marks})'
-
-    def prepare_copy(self, table_name: str) -> Iterable[str]:
+    def prepare_copy(self, table: SQLTable) -> Iterable[str]:
         """
         :return: a list of queries to prepare a copy
         """
         return ()
 
-    def finalize_copy(self, table_name: str) -> Iterable[str]:
+    def insert_all(self, table: SQLTable) -> str:
+        field_count = len(table.fields)
+        question_marks = ", ".join(["?"] * field_count)
+        return f'INSERT INTO {table.name} VALUES ({question_marks})'
+
+    def finalize_copy(self, table: SQLTable) -> Iterable[str]:
         """
         :return: a list of queries to finalize a copy
         """
         return ()
 
-    def create_index(self, table_name: str, index: IN) -> Iterable[str]:
-        return f'CREATE INDEX {index.name} ON {table_name}({index.field_name})',
+    def create_index(self, table: SQLTable, index: IN) -> Iterable[str]:
+        return f'CREATE INDEX {index.name} ON {table.name}({index.field_name})',
 
 
-class QueryExecutor(ABC, Generic[F, IN]):
+class QueryExecutor(ABC):
     @abstractmethod
     def execute(self, queries: Iterable[str], *args, **kwargs):
         pass
@@ -201,23 +197,22 @@ class QueryExecutor(ABC, Generic[F, IN]):
     def query_provider(self) -> QueryProvider:
         pass
 
-    def create_table(self, table_name: str, fields: Sequence[F]):
+    def create_table(self, table: SQLTable):
         """
         create a new table
 
-        :param table_name: the name of the table
-        :param fields: the fields
+        :param table: the table
         """
-        self.execute(self.query_provider.drop_table(table_name))
-        self.execute(self.query_provider.create_table(table_name, fields))
+        self.execute(self.query_provider.drop_table(table))
+        self.execute(self.query_provider.create_table(table))
 
-    def prepare_copy(self, table_name: str):
+    def prepare_copy(self, table: SQLTable):
         """
         create a new table
         """
-        self.execute(self.query_provider.prepare_copy(table_name))
+        self.execute(self.query_provider.prepare_copy(table))
 
-    def copy_path(self, table_name: str, path: Path, encoding: str,
+    def copy_path(self, table: SQLTable, path: Path, encoding: str,
                   dialect: Dialect, count=0):
         """
         create a new table
@@ -226,10 +221,10 @@ class QueryExecutor(ABC, Generic[F, IN]):
             raise Exception(
                 "An executor should implement copy_stream or copy_path")
         with path.open("rb") as source:
-            self.copy_stream(table_name, source, encoding, dialect,
+            self.copy_stream(table, source, encoding, dialect,
                              count=count + 1)
 
-    def copy_stream(self, table_name: str, stream: BinaryIO, encoding: str,
+    def copy_stream(self, table: SQLTable, stream: BinaryIO, encoding: str,
                     dialect: Dialect, count=0):
         """
         create a new table
@@ -242,28 +237,33 @@ class QueryExecutor(ABC, Generic[F, IN]):
             shutil.copyfileobj(stream, dest)
             os.chmod(temp_path, 0o644)
 
-        self.copy_path(table_name, Path(temp_path), encoding, dialect,
+        self.copy_path(table, Path(temp_path), encoding, dialect,
                        count=count + 1)
         os.remove(temp_path)
 
-    def copy_all(self, table_name: str, field_count: int,
-                 records: Iterable[Iterable[str]]):
-        self.executemany()
-        pass
-        # TODO: code me
+    def insert_all(self, table: SQLTable, stream: BytesIO, encoding: str,
+                   dialect: Dialect, count=0):
+        stream = getreader(encoding)(stream)
+        reader = csv_reader(stream, dialect)
+        next(reader)
+        query = self.query_provider.insert_all(table)
+        typed_reader = islice((tuple(
+            field.type_value(value) for value, field in zip(row, table.fields))
+            for row in reader), 10)
+        self.executemany(query, typed_reader)
 
-    def finalize_copy(self, table_name: str):
+    def finalize_copy(self, table: SQLTable):
         """
         create a new table
         """
-        self.execute(self.query_provider.finalize_copy(table_name))
+        self.execute(self.query_provider.finalize_copy(table))
 
-    def create_indices(self, table_name: str, indices: Iterable[IN]):
+    def create_indices(self, table: SQLTable):
         """
         create a new table
         """
-        for index in indices:
-            self.execute(self.query_provider.create_index(table_name, index))
+        for index in table.indices:
+            self.execute(self.query_provider.create_index(table, index))
 
 
 class FakeAttr:
@@ -321,6 +321,15 @@ class SQLIndexProvider(ABC):
         pass
 
 
+class EmptySQLIndexProvider(SQLIndexProvider):
+    """
+    A index provider
+    """
+
+    def get_indices(self, fields: Iterable[SQLField]) -> Iterable[SQLIndex]:
+        return []
+
+
 class SQLTypeConverter(ABC, Generic[U]):
     @abstractmethod
     def get_type(self, item: U) -> SQLType:
@@ -329,3 +338,9 @@ class SQLTypeConverter(ABC, Generic[U]):
         :return: the sql type
         """
         pass
+
+
+class DefaultSQLTypeConverter(SQLTypeConverter[Any]):
+    @abstractmethod
+    def get_type(self, item: Any) -> SQLType:
+        return SQLTypes.TEXT

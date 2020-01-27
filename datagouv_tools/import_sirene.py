@@ -29,19 +29,23 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (Mapping, Iterable, Any, Optional, Iterator,
-                    Callable, TypeVar)
+                    Callable)
 
-from datagouv_tools.sql.generic import SQLField, SQLIndex, QueryProvider, \
-    QueryExecutor, FakeConnection, SQLIndexProvider, SQLTypeConverter, SQLType
-from datagouv_tools.sql.mariadb import MariaDBQueryProvider, \
-    MariaDBQueryExecutor
-from datagouv_tools.sql.postgresql import (PostgreSQLType, PostgreSQLIndexType,
-                                           PostgreSQLQueryProvider,
+from datagouv_tools.sql.generic import (SQLField, SQLIndex, QueryProvider,
+                                        QueryExecutor, FakeConnection,
+                                        SQLIndexProvider, SQLTypeConverter,
+                                        SQLTable)
+from datagouv_tools.sql.mariadb import (MariaDBQueryProvider,
+                                        MariaDBQueryExecutor)
+from datagouv_tools.sql.postgresql import (PostgreSQLQueryProvider,
                                            PostgreSQLQueryExecutor)
+from datagouv_tools.sql.sql_type import SQLType, SQLTypes, SQLIndexTypes
 from datagouv_tools.sql.sqlite import SQLiteQueryExecutor
 from datagouv_tools.util import to_snake
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s/%(filename)s/%(funcName)s/%(lineno)d - %(levelname)s: %(message)s")
+logging.basicConfig(level=logging.DEBUG,
+                    format=("%(asctime)s - %(name)s/%(filename)s/%(funcName)s/"
+                            "%(lineno)d - %(levelname)s: %(message)s"))
 
 
 ###############################################################
@@ -145,7 +149,7 @@ class SireneSchemaParser:
         self._type_provider = type_provider
         self._index_provider = index_provider
 
-    def get_fields(self):
+    def get_fields(self) -> Iterable[SQLField]:
         """
         :return: orderd fields of the table (names are in snake_case)
         """
@@ -167,6 +171,17 @@ class SireneSchemaParser:
     @property
     def table_name(self):
         return self._table_name
+
+    def get_table(self, process_names: Callable[[str], str]
+                  ) -> SQLTable:
+        return SQLTable(
+            name=process_names(self._table_name),
+            fields=[field.process(process_names) for field in
+                    self.get_fields()],
+            indices=[index.process(process_names) for index in
+                     self.get_indices()]
+
+        )
 
 
 def data_sources(sirene_path: Path) -> Iterator[Source]:
@@ -202,18 +217,18 @@ class SireneSQLIndexProvider(SQLIndexProvider):
             if field.field_name[:5] in (
                     "siren", "siret"):
                 yield SQLIndex(field.table_name, field.field_name,
-                               PostgreSQLIndexType.HASH)
+                               SQLIndexTypes.HASH)
 
         for index in self._extra_indices:
             if index.table_name == table_name:
                 yield index
 
 
-POSTGRESQL_TYPE_BY_SIREN_TYPE = {
-    "Liste de codes": PostgreSQLType.TEXT,
-    "Date": PostgreSQLType.DATE,
-    "Texte": PostgreSQLType.TEXT,
-    "Numérique": PostgreSQLType.NUMERIC,
+SQL_TYPE_BY_SIRENE_TYPE = {
+    "Liste de codes": SQLTypes.TEXT,
+    "Date": SQLTypes.DATE,
+    "Texte": SQLTypes.TEXT,
+    "Numérique": SQLTypes.NUMERIC,
 }
 
 
@@ -226,23 +241,24 @@ class PatchedPostgreSireneTypeToSQLTypeConverter(SQLTypeConverter[SchemaRow]):
 
     def get_type(self, row: SchemaRow) -> SQLType:
         t = self._sql_type_by_sirene_type[row.type_name]
-        if t == PostgreSQLType.DATE and row.length != 10:
-            t = PostgreSQLType.TEXT
+        if t == SQLTypes.DATE and row.length != 10:
+            t = SQLTypes.TEXT
 
         if (row.table_name == 'StockEtablissement'
                 and row.name == 'numeroVoieEtablissement'):
-            t = PostgreSQLType.TEXT
+            t = SQLTypes.TEXT
         return t
 
 
 class BasicSireneTypeToSQLTypeConverter(SQLTypeConverter[SchemaRow]):
-    def __init__(self, sql_type_by_sirene_type: Mapping[str, PostgreSQLType]):
+    def __init__(self,
+                 sql_type_by_sirene_type: Mapping[str, SQLType]):
         """
         :param sql_type_by_sirene_type: the default mapping
         """
         self._sql_type_by_sirene_type = sql_type_by_sirene_type
 
-    def get_type(self, row: SchemaRow) -> PostgreSQLType:
+    def get_type(self, row: SchemaRow) -> SQLType:
         return self._sql_type_by_sirene_type[row.type_name]
 
 
@@ -258,20 +274,22 @@ class SireneImporter:
     def __init__(self, logger: logging.Logger, sources: Iterable[Source],
                  type_provider: SQLTypeConverter[SchemaRow],
                  index_provider: SQLIndexProvider,
-                 process_names: Callable[[str], str]):
+                 process_names: Callable[[str], str], bulk_copy: bool):
         """
         :param logger: the logger
         :param sources: the SIRENE sources
         :param type_provider: a function `field_name, table_name -> None or
                             a SQLType`
-        :param process_names: a function to convert field and table names
         :param index_provider: a index provider
+        :param process_names: a function to convert field and table names
+        :param bulk_copy: if True, use bulk copy if available
         """
         self._logger = logger
         self._sources = sources
         self._type_provider = type_provider
         self._index_provider = index_provider
         self._process_names = process_names
+        self._bulk_copy = bulk_copy
 
     def execute(self, executor: QueryExecutor):
         """
@@ -299,23 +317,20 @@ class SireneImporter:
 
     def _copy_data(self, source: Source, parser: SireneSchemaParser,
                    executor: QueryExecutor):
-        fields = [field.process(self._process_names) for field in
-                  parser.get_fields()]
-        table_name = self._process_names(parser.table_name)
-        indices = [index.process(self._process_names) for index in
-                   parser.get_indices()]
+        table = parser.get_table(self._process_names)
 
         self._logger.debug("CSV Schema found: %s", source.schema_path)
-        self._logger.debug("Create table schema: %s", table_name)
-        executor.create_table(table_name, fields)
+        self._logger.debug("Create table schema: %s", table.name)
+        executor.create_table(table)
         self._logger.debug("Prepare copy: %s", source.table_name)
-        executor.prepare_copy(table_name)
+        executor.prepare_copy(table)
         self._logger.debug("Import data from file: %s",
                            source.zipped_data_path)
-        self._copy_from_zipped_file(source.zipped_data_path, parser, executor)
+        self._copy_from_zipped_file(source.zipped_data_path, parser,
+                                    executor)
         self._logger.debug("After copy: %s", source.table_name)
-        executor.finalize_copy(table_name)
-        executor.create_indices(table_name, indices)
+        executor.finalize_copy(table)
+        executor.create_indices(table)
         executor.commit()
 
     def _copy_from_zipped_file(self, zipped_path: Path,
@@ -324,9 +339,13 @@ class SireneImporter:
         # TODO: copier (PgCopier, MariaDBCopier, SqliteCopier)
         with zipfile.ZipFile(zipped_path, 'r') as zipdata:
             data_stream = self._get_stream(zipdata)
-            table_name = self._process_names(parser.table_name)
-            executor.copy_stream(table_name, data_stream, "utf-8",
-                                 csv.unix_dialect)
+            table = parser.get_table(self._process_names)
+            if self._bulk_copy:
+                executor.copy_stream(table, data_stream, "utf-8",
+                                     csv.unix_dialect)
+            else:
+                executor.insert_all(table, data_stream, "utf-8",
+                                    csv.unix_dialect)
 
     def _get_stream(self, zipdata):
         f = zipdata.filelist[0]
@@ -342,8 +361,17 @@ class SireneImporter:
 # MISC #
 ########
 
+
 def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
-                  process_names: Optional[Callable[[str], str]] = to_snake):
+                  process_names: Optional[Callable[[str], str]] = to_snake,
+                  bulk_copy: bool = True):
+    """
+    :param sirene_path: the path to sirene dir
+    :param connection: a DB-API v2 connection
+    :param rdbms: name of the RDBMS
+    :param process_names: a function to process the names
+    :param bulk_copy: if True, use bulk copy if available
+    """
     assert sirene_path.exists()
     logger = logging.getLogger("datagouv_tools")
 
@@ -358,44 +386,48 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
 
     if rdbms.casefold() == "postgresql":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRESQL_TYPE_BY_SIREN_TYPE)
+            SQL_TYPE_BY_SIRENE_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     PostgreSQLIndexType.B_TREE))
+                     SQLIndexTypes.B_TREE))
         query_executor = PostgreSQLQueryExecutor(logger, connection,
                                                  PostgreSQLQueryProvider())
     elif rdbms.casefold() == "sqlite":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRESQL_TYPE_BY_SIREN_TYPE)
+            SQL_TYPE_BY_SIRENE_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     PostgreSQLIndexType.B_TREE))
+                     SQLIndexTypes.B_TREE))
         query_executor = SQLiteQueryExecutor(logger, connection,
                                              QueryProvider())
     elif rdbms.casefold() == "mariadb":
         type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            POSTGRESQL_TYPE_BY_SIREN_TYPE)
+            SQL_TYPE_BY_SIRENE_TYPE)
         index_provider = SireneSQLIndexProvider(
             SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     PostgreSQLIndexType.B_TREE))
+                     SQLIndexTypes.B_TREE))
         query_executor = MariaDBQueryExecutor(logger, connection,
                                               MariaDBQueryProvider())
+    else:
+        raise ValueError(f"Unknown RDBMS '{rdbms}'")
 
     _import_sirene(logger, sirene_path, type_converter, index_provider,
-                   query_executor, process_names)
+                   query_executor, process_names, bulk_copy)
 
 
 def _import_sirene(logger: logging.Logger, sirene_path: Path,
                    type_converter: SQLTypeConverter[SchemaRow],
                    index_provider: SQLIndexProvider,
                    query_executor: QueryExecutor,
-                   process_names: Callable[[str], str]):
+                   process_names: Callable[[str], str],
+                   bulk_copy: bool = True):
     """
     :param sirene_path: path to data and schemas
     :param type_converter: a provider for sql types
     :param index_provider: a provider for indices
     :param query_executor: the executor
     :param process_names: a function to process field and table names
+    :param bulk_copy: if True, use bulk copy if available
     """
 
     logger.debug("Import data with following parameters:"
@@ -404,8 +436,9 @@ def _import_sirene(logger: logging.Logger, sirene_path: Path,
                  type_converter, index_provider,
                  query_executor, process_names)
 
-    importer = SireneImporter(logger, data_sources(sirene_path), type_converter,
-                              index_provider, process_names)
+    importer = SireneImporter(logger, data_sources(sirene_path),
+                              type_converter,
+                              index_provider, process_names, bulk_copy)
     importer.execute(query_executor)
 
 

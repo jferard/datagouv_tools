@@ -17,14 +17,13 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-from codecs import getreader
-from csv import Sniffer, reader as csv_reader, Dialect
+from csv import Dialect
 from io import BytesIO
 from logging import Logger
 from typing import Iterable
 
 from datagouv_tools.sql.generic import (QueryProvider,
-                                        QueryExecutor)
+                                        QueryExecutor, SQLTable)
 
 
 class SQLiteQueryExecutor(QueryExecutor):
@@ -52,10 +51,7 @@ class SQLiteQueryExecutor(QueryExecutor):
     def query_provider(self) -> QueryProvider:
         return self._query_provider
 
-    def copy_stream(self, table_name: str, stream: BytesIO, encoding: str,
+    def copy_stream(self, table: SQLTable, stream: BytesIO, encoding: str,
                     dialect: Dialect, count=0):
-        stream = getreader(encoding)(stream)
-        reader = csv_reader(stream, dialect)
-        header = next(reader)
-        query = self._query_provider.copy_all(table_name, len(header))
-        self.executemany(query, reader)
+        # No bulk copy query in sqlite
+        self.insert_all(table, stream, encoding, dialect)

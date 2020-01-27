@@ -17,57 +17,26 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-import csv
 from csv import Dialect
 from encodings import normalize_encoding
-from enum import Enum
-from io import BytesIO
 from logging import Logger
-from typing import Sequence, Iterable, Any, Mapping
+from typing import Iterable, BinaryIO
 
-from datagouv_tools.sql.generic import SQLField, SQLIndex, QueryProvider, \
-    QueryExecutor, SQLType, SQLIndexType
-
-
-class PostgreSQLType(Enum):
-    """
-    A SQL type
-    """
-    TEXT: SQLType = "text"
-    DATE: SQLType = "date"
-    NUMERIC: SQLType = "numeric"
-    BOOLEAN: SQLType = "boolean"
-
-    def type_str(self, params: Mapping[str, Any]) -> str:
-        return self.value
+from datagouv_tools.sql.generic import (SQLIndex, QueryProvider,
+                                        QueryExecutor, SQLTable)
 
 
-class PostgreSQLIndexType(Enum):
-    """
-    A SQL index type
-    """
-    B_TREE: SQLIndexType = "btree"
-    HASH: SQLIndexType = "hash"
-    GIST: SQLIndexType = "gist"
-    SP_GIST: SQLIndexType = "spgist"
-    GIN: SQLIndexType = "gin"
-
-    @property
-    def type_str(self):
-        return self.value
-
-
-class PostgreSQLQueryProvider(QueryProvider[SQLField[PostgreSQLType],
-                                            SQLIndex[PostgreSQLIndexType]]):
+class PostgreSQLQueryProvider(QueryProvider):
     """
     A provider for PostgreSQL queries.
     """
 
     # override
-    def prepare_copy(self, table_name: str) -> Iterable[str]:
-        return f'TRUNCATE {table_name}',
+    def prepare_copy(self, table: SQLTable) -> Iterable[str]:
+        return f'TRUNCATE {table.name}',
 
-    def copy_stream(self, table_name: str, encoding: str, dialect: Dialect) -> \
+    def copy_stream(self, table: SQLTable, encoding: str,
+                    dialect: Dialect) -> \
             Iterable[str]:
         encoding = normalize_encoding(encoding).upper()
         options = {"FORMAT": "CSV",
@@ -80,7 +49,7 @@ class PostgreSQLQueryProvider(QueryProvider[SQLField[PostgreSQLType],
             options["QUOTE"] = self._escape_char(dialect.quotechar)
         options_str = ", ".join(f"{k} {v}" for k, v in options.items())
 
-        return f"COPY {table_name} FROM STDIN WITH ({options_str})",
+        return f"COPY {table.name} FROM STDIN WITH ({options_str})",
 
     def _escape_char(self, text: str) -> str:
         """
@@ -97,19 +66,16 @@ class PostgreSQLQueryProvider(QueryProvider[SQLField[PostgreSQLType],
         return f"'{text}'"
 
     # override
-    def finalize_copy(self, table_name: str) -> Iterable[str]:
-        return f'ANALYZE {table_name}',
+    def finalize_copy(self, table: SQLTable) -> Iterable[str]:
+        return f'ANALYZE {table.name}',
 
     # override
-    def create_index(self, table_name: str,
-                     index: SQLIndex[PostgreSQLIndexType]) -> Iterable[str]:
-        return (f'CREATE INDEX {index.name} ON {table_name} '
+    def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
+        return (f'CREATE INDEX {index.name} ON {table.name} '
                 f'USING {index.type_str}({index.field_name})',)
 
 
-class PostgreSQLQueryExecutor(
-    QueryExecutor[SQLField[PostgreSQLType],
-                  SQLIndex[PostgreSQLIndexType]]):
+class PostgreSQLQueryExecutor(QueryExecutor):
     def __init__(self, logger: Logger, connection,
                  query_provider: PostgreSQLQueryProvider):
         self._logger = logger
@@ -139,9 +105,9 @@ class PostgreSQLQueryExecutor(
         return self._query_provider
 
     # override
-    def copy_stream(self, table_name: str, stream: BytesIO, encoding: str,
-                    dialect: Dialect):
-        queries = self._query_provider.copy_stream(table_name, encoding,
+    def copy_stream(self, table: SQLTable, stream: BinaryIO, encoding: str,
+                    dialect: Dialect, count=0):
+        queries = self._query_provider.copy_stream(table, encoding,
                                                    dialect)
         for query in queries:
             self._logger.debug(query)

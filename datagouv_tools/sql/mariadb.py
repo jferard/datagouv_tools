@@ -17,23 +17,25 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-from csv import Dialect
+from codecs import getreader
+from csv import Dialect, reader as csv_reader
 from encodings import normalize_encoding
+from io import BytesIO
 from logging import Logger
 from pathlib import Path
 from typing import Iterable
 
 from datagouv_tools.sql.generic import (QueryProvider,
-                                        QueryExecutor, SQLIndex, SQLField)
+                                        QueryExecutor, SQLIndex, SQLTable)
 
 
-class MariaDBQueryProvider(QueryProvider[SQLField, SQLIndex]):
-    def copy_path(self, table_name: str, path: Path, encoding: str,
+class MariaDBQueryProvider(QueryProvider):
+    def copy_path(self, table: SQLTable, path: Path, encoding: str,
                   dialect: Dialect) -> Iterable[str]:
         encoding = normalize_encoding(encoding).upper().replace("_", "")
         lines = [
             f"LOAD DATA INFILE '{path}'",
-            f"INTO TABLE `{table_name}`",
+            f"INTO TABLE `{table.name}`",
             f"CHARACTER SET '{encoding}'",
             f"FIELDS TERMINATED BY '{dialect.delimiter}'",
             f"OPTIONALLY ENCLOSED BY '{dialect.quotechar}'",
@@ -43,13 +45,14 @@ class MariaDBQueryProvider(QueryProvider[SQLField, SQLIndex]):
         lines.append("IGNORE 1 LINES")
         return "\n".join(lines),
 
-    def create_index(self, table_name: str, index: SQLIndex) -> Iterable[str]:
-        return f'CREATE INDEX {index.name} ON {table_name}({index.field_name}(255))',
+    def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
+        return (f'CREATE INDEX {index.name} ON {table.name}'
+                f'({index.field_name}(255))'),
 
 
 class MariaDBQueryExecutor(QueryExecutor):
     def __init__(self, logger: Logger, connection,
-                 query_provider: QueryProvider):
+                 query_provider: MariaDBQueryProvider):
         self._logger = logger
         self._connection = connection
         self._cursor = connection.cursor()
@@ -69,11 +72,19 @@ class MariaDBQueryExecutor(QueryExecutor):
         self._connection.commit()
 
     @property
-    def query_provider(self) -> QueryProvider:
+    def query_provider(self) -> MariaDBQueryProvider:
         return self._query_provider
 
-    def copy_path(self, table_name: str, path: Path, encoding: str,
+    def copy_path(self, table: SQLTable, path: Path, encoding: str,
                   dialect: Dialect, count=0):
-        queries = self.query_provider.copy_path(table_name, path, encoding,
+        queries = self.query_provider.copy_path(table, path, encoding,
                                                 dialect)
         self.execute(queries)
+
+    def insert_all(self, table: SQLTable, stream: BytesIO, encoding: str,
+                   dialect: Dialect, count=0):
+        stream = getreader(encoding)(stream)
+        reader = csv_reader(stream, dialect)
+        _ = next(reader)
+        query = self.query_provider.insert_all(table)
+        self.executemany(query, list(reader))
