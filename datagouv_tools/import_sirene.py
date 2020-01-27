@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import (Mapping, Iterable, Any, Optional, Iterator,
                     Callable)
 
+from datagouv_tools.import_generic import ImporterArgs
 from datagouv_tools.sql.generic import (SQLField, SQLIndex, QueryProvider,
                                         QueryExecutor, FakeConnection,
                                         SQLIndexProvider, SQLTypeConverter,
@@ -134,19 +135,19 @@ class SireneSchemaParser:
     """
 
     def __init__(self, table_name: str, rows: Iterable[Mapping[str, str]],
-                 type_provider: SQLTypeConverter,
+                 type_converter: SQLTypeConverter,
                  index_provider: SQLIndexProvider):
         """
         :param table_name: the table name
         :param rows: rows of the csv file
-        :param type_provider: a provider for sql types
+        :param type_converter: a provider for sql types
         :param index_provider: a provider for indices
         """
         self._table_name = table_name
         self._rows = [SchemaRow(table_name, row[NAME],
                                 row[TYPE], int(row[LENGTH]),
                                 int(row[RANK]), row[CAPTION]) for row in rows]
-        self._type_provider = type_provider
+        self._type_converter = type_converter
         self._index_provider = index_provider
 
     def get_fields(self) -> Iterable[SQLField]:
@@ -155,7 +156,7 @@ class SireneSchemaParser:
         """
         return sorted(
             SQLField(table_name=self._table_name, field_name=row.name,
-                     type=self._type_provider.get_type(row), rank=row.rank,
+                     type=self._type_converter.get_type(row), rank=row.rank,
                      length=row.length,
                      comment=row.caption)
             for row in self._rows)
@@ -272,26 +273,21 @@ class SireneImporter:
     """
 
     def __init__(self, logger: logging.Logger, sources: Iterable[Source],
-                 type_provider: SQLTypeConverter[SchemaRow],
-                 index_provider: SQLIndexProvider,
+                 importer_args: ImporterArgs,
                  process_names: Callable[[str], str], bulk_copy: bool):
         """
         :param logger: the logger
         :param sources: the SIRENE sources
-        :param type_provider: a function `field_name, table_name -> None or
-                            a SQLType`
-        :param index_provider: a index provider
         :param process_names: a function to convert field and table names
         :param bulk_copy: if True, use bulk copy if available
         """
         self._logger = logger
         self._sources = sources
-        self._type_provider = type_provider
-        self._index_provider = index_provider
+        self._importer_args = importer_args
         self._process_names = process_names
         self._bulk_copy = bulk_copy
 
-    def execute(self, executor: QueryExecutor):
+    def execute(self):
         """
         Import the data
         :param executor: the executor
@@ -305,20 +301,20 @@ class SireneImporter:
                                      source.schema_path)
                 continue
 
-            self._copy_data(source, parser, executor)
+            self._copy_data(source, parser)
 
     def _create_schema_parser(self, source: Source) -> SireneSchemaParser:
         with source.schema_path.open('r', encoding='utf-8') as schema:
             reader = csv.DictReader(schema)
             parser = SireneSchemaParser(source.table_name, reader,
-                                        self._type_provider,
-                                        self._index_provider)
+                                        self._importer_args.type_converter,
+                                        self._importer_args.index_provider)
         return parser
 
-    def _copy_data(self, source: Source, parser: SireneSchemaParser,
-                   executor: QueryExecutor):
+    def _copy_data(self, source: Source, parser: SireneSchemaParser):
         table = parser.get_table(self._process_names)
 
+        executor = self._importer_args.query_executor
         self._logger.debug("CSV Schema found: %s", source.schema_path)
         self._logger.debug("Create table schema: %s", table.name)
         executor.create_table(table)
@@ -362,6 +358,57 @@ class SireneImporter:
 ########
 
 
+def postgres_args(logger, connection):
+    return ImporterArgs(
+        query_executor=PostgreSQLQueryExecutor(logger, connection,
+                                               PostgreSQLQueryProvider()),
+        type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
+            SQL_TYPE_BY_SIRENE_TYPE),
+        index_provider=SireneSQLIndexProvider(
+            SQLIndex('StockEtablissement', "codePostalEtablissement",
+                     SQLIndexTypes.B_TREE)),
+    )
+
+
+def sqlite_args(logger, connection):
+    return ImporterArgs(
+        query_executor=SQLiteQueryExecutor(logger, connection,
+                                           QueryProvider()),
+        type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
+            SQL_TYPE_BY_SIRENE_TYPE),
+        index_provider=SireneSQLIndexProvider(
+            SQLIndex('StockEtablissement', "codePostalEtablissement",
+                     SQLIndexTypes.B_TREE)),
+    )
+
+
+def mariadb_args(logger, connection):
+    return ImporterArgs(
+        query_executor=MariaDBQueryExecutor(logger, connection,
+                                            MariaDBQueryProvider()),
+        type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
+            SQL_TYPE_BY_SIRENE_TYPE),
+        index_provider=SireneSQLIndexProvider(
+            SQLIndex('StockEtablissement', "codePostalEtablissement",
+                     SQLIndexTypes.B_TREE)),
+    )
+
+
+_ARGS_FACTORY_BY_RDBMS = {}
+
+
+def register(importer_args_factory: Callable[
+    [logging.Logger, Any], ImporterArgs],
+             *rdbms_list: str):
+    for rdbms in rdbms_list:
+        _ARGS_FACTORY_BY_RDBMS[rdbms] = importer_args_factory
+
+
+register(postgres_args, "pg", "postgres", "postgresql")
+register(sqlite_args, "sqlite", "sqlite3")
+register(mariadb_args, "maria", "mariadb", "mysql")
+
+
 def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                   process_names: Optional[Callable[[str], str]] = to_snake,
                   bulk_copy: bool = True):
@@ -384,62 +431,32 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                  "sirene_path: %s, connection: %s, rdbms: %s", sirene_path,
                  connection, rdbms)
 
-    if rdbms.casefold() == "postgresql":
-        type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            SQL_TYPE_BY_SIRENE_TYPE)
-        index_provider = SireneSQLIndexProvider(
-            SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     SQLIndexTypes.B_TREE))
-        query_executor = PostgreSQLQueryExecutor(logger, connection,
-                                                 PostgreSQLQueryProvider())
-    elif rdbms.casefold() == "sqlite":
-        type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            SQL_TYPE_BY_SIRENE_TYPE)
-        index_provider = SireneSQLIndexProvider(
-            SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     SQLIndexTypes.B_TREE))
-        query_executor = SQLiteQueryExecutor(logger, connection,
-                                             QueryProvider())
-    elif rdbms.casefold() == "mariadb":
-        type_converter = PatchedPostgreSireneTypeToSQLTypeConverter(
-            SQL_TYPE_BY_SIRENE_TYPE)
-        index_provider = SireneSQLIndexProvider(
-            SQLIndex('StockEtablissement', "codePostalEtablissement",
-                     SQLIndexTypes.B_TREE))
-        query_executor = MariaDBQueryExecutor(logger, connection,
-                                              MariaDBQueryProvider())
-    else:
+    args_factory = _ARGS_FACTORY_BY_RDBMS.get(rdbms.casefold())
+    if args_factory is None:
         raise ValueError(f"Unknown RDBMS '{rdbms}'")
 
-    _import_sirene(logger, sirene_path, type_converter, index_provider,
-                   query_executor, process_names, bulk_copy)
+    importer_args = args_factory(logger, connection)
+    _import_sirene(logger, sirene_path, importer_args, process_names, bulk_copy)
 
 
 def _import_sirene(logger: logging.Logger, sirene_path: Path,
-                   type_converter: SQLTypeConverter[SchemaRow],
-                   index_provider: SQLIndexProvider,
-                   query_executor: QueryExecutor,
+                   importer_args: ImporterArgs,
                    process_names: Callable[[str], str],
                    bulk_copy: bool = True):
     """
     :param sirene_path: path to data and schemas
-    :param type_converter: a provider for sql types
-    :param index_provider: a provider for indices
-    :param query_executor: the executor
+    :param importer_args: objects to import data
     :param process_names: a function to process field and table names
     :param bulk_copy: if True, use bulk copy if available
     """
 
     logger.debug("Import data with following parameters:"
-                 "sirene_path: %s, type_converter: %s, index_provider: %s, "
-                 "query_executor: %s, process_names: %s", sirene_path,
-                 type_converter, index_provider,
-                 query_executor, process_names)
+                 "sirene_path: %s, importer_args: %s, process_names: %s",
+                 sirene_path, importer_args, process_names)
 
     importer = SireneImporter(logger, data_sources(sirene_path),
-                              type_converter,
-                              index_provider, process_names, bulk_copy)
-    importer.execute(query_executor)
+                              importer_args, process_names, bulk_copy)
+    importer.execute()
 
 
 ########
@@ -447,5 +464,4 @@ def _import_sirene(logger: logging.Logger, sirene_path: Path,
 ########
 if __name__ == "__main__":
     import doctest
-
     doctest.testmod()

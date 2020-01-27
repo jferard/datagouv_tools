@@ -54,18 +54,18 @@ class ImportSireneTest(unittest.TestCase):
     def setUp(self):
         self.path = Path(r"/home/jferard/datagouv/sirene")
 
-    @unittest.skip("intregation test")
+#    @unittest.skip("intregation test")
     def test_postgres(self):
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
         pg8000.paramstyle = "qmark"
         try:
-            import_sirene(self.path, connection, "postgresql", bulk_copy=False)
+            import_sirene(self.path, connection, "postgresql")
         finally:
             connection.commit()
             connection.close()
 
-    @unittest.skip("intregation test")
+#    @unittest.skip("intregation test")
     def test_sqlite(self):
         connection = sqlite3.connect('sirene.db')
         try:
@@ -74,12 +74,12 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skip("intregation test")
+#    @unittest.skip("intregation test")
     def test_maria(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
         try:
-            import_sirene(self.path, connection, "mariadb", bulk_copy=False)
+            import_sirene(self.path, connection, "mariadb")
         finally:
             connection.commit()
             connection.close()

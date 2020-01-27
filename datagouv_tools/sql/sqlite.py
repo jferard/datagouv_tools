@@ -17,7 +17,8 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-from csv import Dialect
+from codecs import getreader
+from csv import Dialect, reader as csv_reader
 from io import BytesIO
 from logging import Logger
 from typing import Iterable
@@ -47,6 +48,9 @@ class SQLiteQueryExecutor(QueryExecutor):
         self._logger.debug("commit")
         self._connection.commit()
 
+    def close(self):
+        self._connection.close()
+
     @property
     def query_provider(self) -> QueryProvider:
         return self._query_provider
@@ -55,3 +59,12 @@ class SQLiteQueryExecutor(QueryExecutor):
                     dialect: Dialect, count=0):
         # No bulk copy query in sqlite
         self.insert_all(table, stream, encoding, dialect)
+
+    def insert_all(self, table: SQLTable, stream: BytesIO, encoding: str,
+                   dialect: Dialect, count=0):
+        stream = getreader(encoding)(stream)
+        reader = csv_reader(stream, dialect)
+        next(reader)
+        query = self.query_provider.insert_all(table)
+        # SQLite does not need typed values
+        self.executemany(query, reader)

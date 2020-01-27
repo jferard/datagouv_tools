@@ -99,6 +99,9 @@ class PostgreSQLQueryExecutor(QueryExecutor):
         self._logger.debug("commit")
         self._connection.commit()
 
+    def close(self):
+        self._connection.close()
+
     # override
     @property
     def query_provider(self) -> QueryProvider:

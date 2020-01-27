@@ -15,6 +15,8 @@
 #  more details.
 #  You should have received a copy of the GNU General Public License along with
 #  this program. If not, see <http://www.gnu.org/licenses/>.
+import codecs
+from io import BytesIO
 from typing import Optional, Tuple, Iterable
 
 
@@ -88,6 +90,92 @@ def to_snake(text: str) -> str:
     return '_'.join(split_on_cat(text)).lower()
 
 
+def sanitize(text: str) -> str:
+    """
+    Remove accents and special chars from a string
+
+    >>> sanitize("Code Départ’ement")
+    'Code Departement'
+
+
+    @param text: the unicode string
+    @return: the ascii string
+    """
+    import unicodedata
+    try:
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode(
+            'ascii')
+    except UnicodeError:
+        pass
+    return text
+
+
+def to_standard(text: str) -> str:
+    """
+    >>> to_standard("Code Départ’ement")
+    'code_departement'
+
+    :param text:
+    :return:
+    """
+    return sanitize(text.replace(" ", "_")).casefold()
+
+
+class CSVStream(BytesIO):
+    """
+    A stream.
+    """
+    def __init__(self, name: str, header, queue,
+                 encode=codecs.getencoder("ascii")):
+        super().__init__()
+        self._name = name
+        self._queue = queue
+        self._encode = encode
+        self._header = header
+        self._remaining_bytes = self._encode("\t".join(header) + "\n")[0]
+        self._queue_ended = False
+
+    def send(self, data):
+        self._queue.put(data)
+
+    def readinto(self, b):
+        i = len(self._remaining_bytes)
+        len_b = len(b)
+        if len_b <= i:
+            b[:] = self._remaining_bytes[:len_b]
+            self._remaining_bytes = self._remaining_bytes[len_b:]
+            return len_b
+
+        # len_b > i
+        b[:i] = self._remaining_bytes
+        self._remaining_bytes = b''
+        if self._queue_ended:
+            return i
+
+        while i < len_b:
+            csv_line = self._queue.get()
+            if csv_line is None:
+                self._queue_ended = True
+                return i
+
+            data = self._encode(csv_line)[0]
+            next_i = i + len(data)
+            if next_i >= len_b:
+                room_b = len_b - i
+                b[i:] = data[:room_b]
+                self._remaining_bytes = data[room_b:]
+                return len_b
+            else:
+                b[i:next_i] = data
+
+            i = next_i
+
+    def close(self):
+        pass
+
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
+
+

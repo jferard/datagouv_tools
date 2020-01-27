@@ -71,6 +71,9 @@ class MariaDBQueryExecutor(QueryExecutor):
         self._logger.debug("commit")
         self._connection.commit()
 
+    def close(self):
+        self._connection.close()
+
     @property
     def query_provider(self) -> MariaDBQueryProvider:
         return self._query_provider

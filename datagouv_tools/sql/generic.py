@@ -25,7 +25,7 @@ from codecs import getreader
 from csv import reader as csv_reader, Dialect
 from dataclasses import dataclass
 from io import BytesIO
-from itertools import chain, islice
+from itertools import chain
 from pathlib import Path
 from typing import (Callable, Iterable, Generic, TypeVar, Any, BinaryIO,
                     Collection)
@@ -192,6 +192,10 @@ class QueryExecutor(ABC):
     def commit(self):
         pass
 
+    @abstractmethod
+    def close(self):
+        pass
+
     @property
     @abstractmethod
     def query_provider(self) -> QueryProvider:
@@ -247,9 +251,10 @@ class QueryExecutor(ABC):
         reader = csv_reader(stream, dialect)
         next(reader)
         query = self.query_provider.insert_all(table)
-        typed_reader = islice((tuple(
-            field.type_value(value) for value, field in zip(row, table.fields))
-            for row in reader), 10)
+        table_fields = table.fields
+        typed_reader = (tuple(field.type_value(value)
+                              for field, value in zip(table_fields, row))
+                        for row in reader)
         self.executemany(query, typed_reader)
 
     def finalize_copy(self, table: SQLTable):
@@ -341,6 +346,5 @@ class SQLTypeConverter(ABC, Generic[U]):
 
 
 class DefaultSQLTypeConverter(SQLTypeConverter[Any]):
-    @abstractmethod
     def get_type(self, item: Any) -> SQLType:
         return SQLTypes.TEXT
