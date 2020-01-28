@@ -11,17 +11,20 @@ from io import TextIOWrapper
 from itertools import islice
 from logging import Logger, getLogger
 from pathlib import Path
-from typing import Sequence, Any, Callable
+from typing import Sequence, Any, Callable, Iterable
 from zipfile import ZipFile
 
-import pg8000
-
-from datagouv_tools.import_generic import ImporterArgs
-from datagouv_tools.sql.generic import EmptySQLIndexProvider, \
-    DefaultSQLTypeConverter, SQLTable, SQLField, QueryExecutor
-from datagouv_tools.sql.postgresql import PostgreSQLQueryExecutor, \
-    PostgreSQLQueryProvider
-from datagouv_tools.sql.sql_type import SQLTypes
+from datagouv_tools.import_generic import ImporterContext, ImporterThreadContext
+from datagouv_tools.sql.generic import (SQLTable, SQLField, QueryExecutor,
+                                        DefaultSQLTypeConverter,
+                                        SQLIndexProvider, SQLIndex,
+                                        QueryProvider, FakeConnection)
+from datagouv_tools.sql.mariadb import (MariaDBQueryExecutor,
+                                        MariaDBQueryProvider)
+from datagouv_tools.sql.postgresql import (PostgreSQLQueryExecutor,
+                                           PostgreSQLQueryProvider)
+from datagouv_tools.sql.sql_type import SQLTypes, SQLIndexTypes
+from datagouv_tools.sql.sqlite import SQLiteQueryExecutor
 from datagouv_tools.util import CSVStream, to_standard
 
 create_thread = threading.Thread
@@ -29,14 +32,6 @@ logging.basicConfig(level=logging.DEBUG,
                     format=("%(asctime)s - %(name)s/%(filename)s/%(funcName)s/"
                             "%(lineno)d - %(levelname)s: %(message)s"))
 
-
-def postgres_args(logger, connection):
-    return ImporterArgs(
-        query_executor=PostgreSQLQueryExecutor(logger, connection,
-                                               PostgreSQLQueryProvider()),
-        type_converter=DefaultSQLTypeConverter(),
-        index_provider=EmptySQLIndexProvider(),
-    )
 
 ###########
 # FANTOIR #
@@ -194,16 +189,16 @@ def get_record_format(line):
 # THREADS #
 ###########
 
-def import_with_threads(path_zipped, get_args: Callable[[], ImporterArgs]):
+def _import_with_threads(path_zipped, importer_context: ImporterThreadContext):
     consumer_thread_by_name = {}
     thread_info_by_name = {}
     for record_format in RECORD_FORMATS:
-        importer_args = get_args()
         csv_stream = CSVStream(record_format.name, record_format.header,
                                queue.Queue())
-        thread_info = ThreadInfo(importer_args.query_executor, record_format, csv_stream)
+        query_executor = importer_context.new_executor()
+        thread_info = ThreadInfo(query_executor, record_format, csv_stream)
         thread = create_thread(
-            target=consumer_factory(importer_args, thread_info))
+            target=consumer_factory(query_executor, thread_info))
         thread_info_by_name[record_format.name] = thread_info
         consumer_thread_by_name[record_format.name] = thread
 
@@ -234,24 +229,6 @@ def dispatch_records_factory(path, consumer_thread_by_name):
     return dispatch_records
 
 
-def consumer_factory(importer_args: ImporterArgs, thread_info):
-    executor = importer_args.query_executor
-
-    record_format = thread_info.record_format
-    connection = thread_info.connection
-
-    def copy_table(table):
-        dialect = get_dialect()
-        executor.copy_stream(table, thread_info.csv_stream, 'latin-1',
-                             dialect)
-
-    def consumer():
-        write_table(executor, record_format, copy_table)
-        executor.close()
-
-    return consumer
-
-
 @dataclass
 class ThreadInfo:
     connection: Any
@@ -259,20 +236,41 @@ class ThreadInfo:
     csv_stream: CSVStream
 
 
+def consumer_factory(query_executor: QueryExecutor,
+                     thread_info: ThreadInfo):
+    record_format = thread_info.record_format
+
+    def copy_table(table):
+        dialect = get_dialect()
+        query_executor.copy_stream(table, thread_info.csv_stream, 'latin-1',
+                                   dialect)
+
+    def consumer():
+        write_table(query_executor, record_format, copy_table)
+        query_executor.close()
+
+    return consumer
+
+
 ########
 # TEMP #
 ########
 
-def import_with_temp(path_zipped, importer_args):
+def _import_with_temp(path_zipped: Path, importer_context: ImporterContext):
     temp_path_by_name = dispatch_to_temp(path_zipped)
     for record_format in RECORD_FORMATS:
         if record_format == HEADER_FORMAT:
             continue
-        write_table_from_temp(importer_args, record_format,
+        write_table_from_temp(importer_context, record_format,
                               temp_path_by_name[record_format.name])
 
 
-def dispatch_to_temp(path):
+def dispatch_to_temp(path_zipped: Path):
+    """
+    Dispatch lines to
+    :param path_zipped:
+    :return:
+    """
     temp_dir = tempfile.gettempdir()
     path_by_name = {
         record_format.name: Path(temp_dir, f"{record_format.name}.csv") for
@@ -286,15 +284,15 @@ def dispatch_to_temp(path):
     logger = getLogger()
 
     dispatcher = Dispatcher(logger, send_to)
-    dispatcher.dispatch(path)
+    dispatcher.dispatch(path_zipped)
     for stream in stream_by_name.values():
         stream.close()
 
     return path_by_name
 
 
-def write_table_from_temp(importer_args, record_format, path):
-    executor = importer_args.query_executor
+def write_table_from_temp(importer_context, record_format, path):
+    executor = importer_context.query_executor
 
     def copy_table(table):
         dialect = get_dialect()
@@ -340,7 +338,7 @@ class Dispatcher:
         f = TextIOWrapper(stream, 'ascii')
         count = 0
         t = datetime.now()
-        for line in islice(f, 1000):
+        for line in f:
             if line[:10] == '9999999999':  # last line
                 continue
             count += 1
@@ -377,6 +375,113 @@ def get_dialect():
     return dialect
 
 
+########
+# MISC #
+########
+class FantoirSQLIndexProvider(SQLIndexProvider):
+    def get_indices(self, fields: Iterable[SQLField]) -> Iterable[SQLIndex]:
+        table_name = next((f.table_name for f in fields), None)
+        for field in fields:
+            if field.starts_with("code_"):
+                yield SQLIndex(field.table_name, field.field_name,
+                               SQLIndexTypes.HASH)
+
+
+def postgres_context(logger, connection):
+    return ImporterContext(
+        query_executor=PostgreSQLQueryExecutor(logger, connection,
+                                               PostgreSQLQueryProvider()),
+        type_converter=DefaultSQLTypeConverter(),
+        index_provider=FantoirSQLIndexProvider(),
+    )
+
+
+def postgres_thread_context(logger, new_connection: Callable[[], Any]):
+    return ImporterThreadContext(
+        new_executor=lambda: PostgreSQLQueryExecutor(logger, new_connection(),
+                                                     PostgreSQLQueryProvider()),
+        type_converter=DefaultSQLTypeConverter(),
+        index_provider=FantoirSQLIndexProvider(),
+    )
+
+
+def sqlite_context(logger, connection):
+    return ImporterContext(
+        query_executor=SQLiteQueryExecutor(logger, connection,
+                                           QueryProvider()),
+        type_converter=DefaultSQLTypeConverter(),
+        index_provider=FantoirSQLIndexProvider(),
+    )
+
+
+def mariadb_context(logger, connection):
+    return ImporterContext(
+        query_executor=MariaDBQueryExecutor(logger, connection,
+                                            MariaDBQueryProvider()),
+        type_converter=DefaultSQLTypeConverter(),
+        index_provider=FantoirSQLIndexProvider(),
+    )
+
+
+_FANTOIR_CONTEXT_FACTORY_BY_RDBMS = {}
+
+
+def register(importer_context_factory: Callable[
+    [logging.Logger, Any], ImporterContext],
+             *rdbms_list: str):
+    for rdbms in rdbms_list:
+        _FANTOIR_CONTEXT_FACTORY_BY_RDBMS[rdbms] = importer_context_factory
+
+
+_FANTOIR_THREAD_CONTEXT_FACTORY_BY_RDBMS = {}
+
+
+def register_thread(importer_thread_context_factory: Callable[
+    [logging.Logger, Callable[[], Any]], ImporterThreadContext],
+                    *rdbms_list: str):
+    for rdbms in rdbms_list:
+        _FANTOIR_THREAD_CONTEXT_FACTORY_BY_RDBMS[
+            rdbms] = importer_thread_context_factory
+
+
+register(postgres_context, "pg", "postgres", "postgresql")
+register_thread(postgres_thread_context, "pg", "postgres", "postgresql")
+register(sqlite_context, "sqlite", "sqlite3")
+register(mariadb_context, "maria", "mariadb", "mysql")
+
+
+def import_fantoir(connection, fantoir_path, rdbms):
+    logger = logging.getLogger("datagouv_tools")
+    if connection is None:
+        connection = FakeConnection(logger)
+    logger.debug("Import data with following parameters:"
+                 "fantoir_path: %s, connection: %s, rdbms: %s",
+                 fantoir_path,
+                 connection, rdbms)
+    logger = logging.getLogger("datagouv_tools")
+    context_factory = _FANTOIR_CONTEXT_FACTORY_BY_RDBMS.get(
+        rdbms.casefold())
+    if context_factory is None:
+        raise ValueError(f"Unknown RDBMS '{rdbms}'")
+    importer_context = context_factory(logger, connection)
+    _import_with_temp(fantoir_path, importer_context)
+
+
+def import_fantoir_thread(new_connection, fantoir_path, rdbms):
+    logger = logging.getLogger("datagouv_tools")
+    logger.debug("Import data with following parameters:"
+                 "fantoir_path: %s, rdbms: %s",
+                 fantoir_path, rdbms)
+    logger = logging.getLogger("datagouv_tools")
+    context_factory = _FANTOIR_THREAD_CONTEXT_FACTORY_BY_RDBMS.get(
+        rdbms.casefold())
+    if context_factory is None:
+        raise ValueError(f"Unknown RDBMS '{rdbms}'")
+    importer_thread_context = context_factory(logger, new_connection)
+    _import_with_threads(fantoir_path, importer_thread_context)
+
+
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()

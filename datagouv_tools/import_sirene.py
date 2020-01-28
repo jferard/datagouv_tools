@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import (Mapping, Iterable, Any, Optional, Iterator,
                     Callable)
 
-from datagouv_tools.import_generic import ImporterArgs
+from datagouv_tools.import_generic import ImporterContext
 from datagouv_tools.sql.generic import (SQLField, SQLIndex, QueryProvider,
                                         QueryExecutor, FakeConnection,
                                         SQLIndexProvider, SQLTypeConverter,
@@ -273,7 +273,7 @@ class SireneImporter:
     """
 
     def __init__(self, logger: logging.Logger, sources: Iterable[Source],
-                 importer_args: ImporterArgs,
+                 importer_context: ImporterContext,
                  process_names: Callable[[str], str], bulk_copy: bool):
         """
         :param logger: the logger
@@ -283,7 +283,7 @@ class SireneImporter:
         """
         self._logger = logger
         self._sources = sources
-        self._importer_args = importer_args
+        self._importer_context = importer_context
         self._process_names = process_names
         self._bulk_copy = bulk_copy
 
@@ -307,14 +307,14 @@ class SireneImporter:
         with source.schema_path.open('r', encoding='utf-8') as schema:
             reader = csv.DictReader(schema)
             parser = SireneSchemaParser(source.table_name, reader,
-                                        self._importer_args.type_converter,
-                                        self._importer_args.index_provider)
+                                        self._importer_context.type_converter,
+                                        self._importer_context.index_provider)
         return parser
 
     def _copy_data(self, source: Source, parser: SireneSchemaParser):
         table = parser.get_table(self._process_names)
 
-        executor = self._importer_args.query_executor
+        executor = self._importer_context.query_executor
         self._logger.debug("CSV Schema found: %s", source.schema_path)
         self._logger.debug("Create table schema: %s", table.name)
         executor.create_table(table)
@@ -358,8 +358,8 @@ class SireneImporter:
 ########
 
 
-def postgres_args(logger, connection):
-    return ImporterArgs(
+def postgres_context(logger, connection):
+    return ImporterContext(
         query_executor=PostgreSQLQueryExecutor(logger, connection,
                                                PostgreSQLQueryProvider()),
         type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
@@ -370,8 +370,8 @@ def postgres_args(logger, connection):
     )
 
 
-def sqlite_args(logger, connection):
-    return ImporterArgs(
+def sqlite_context(logger, connection):
+    return ImporterContext(
         query_executor=SQLiteQueryExecutor(logger, connection,
                                            QueryProvider()),
         type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
@@ -382,8 +382,8 @@ def sqlite_args(logger, connection):
     )
 
 
-def mariadb_args(logger, connection):
-    return ImporterArgs(
+def mariadb_context(logger, connection):
+    return ImporterContext(
         query_executor=MariaDBQueryExecutor(logger, connection,
                                             MariaDBQueryProvider()),
         type_converter=PatchedPostgreSireneTypeToSQLTypeConverter(
@@ -394,19 +394,19 @@ def mariadb_args(logger, connection):
     )
 
 
-_ARGS_FACTORY_BY_RDBMS = {}
+_SIRENE_CONTEXT_FACTORY_BY_RDBMS = {}
 
 
-def register(importer_args_factory: Callable[
-    [logging.Logger, Any], ImporterArgs],
+def register(importer_context_factory: Callable[
+    [logging.Logger, Any], ImporterContext],
              *rdbms_list: str):
     for rdbms in rdbms_list:
-        _ARGS_FACTORY_BY_RDBMS[rdbms] = importer_args_factory
+        _SIRENE_CONTEXT_FACTORY_BY_RDBMS[rdbms] = importer_context_factory
 
 
-register(postgres_args, "pg", "postgres", "postgresql")
-register(sqlite_args, "sqlite", "sqlite3")
-register(mariadb_args, "maria", "mariadb", "mysql")
+register(postgres_context, "pg", "postgres", "postgresql")
+register(sqlite_context, "sqlite", "sqlite3")
+register(mariadb_context, "maria", "mariadb", "mysql")
 
 
 def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
@@ -431,31 +431,33 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
                  "sirene_path: %s, connection: %s, rdbms: %s", sirene_path,
                  connection, rdbms)
 
-    args_factory = _ARGS_FACTORY_BY_RDBMS.get(rdbms.casefold())
-    if args_factory is None:
+    context_factory = _SIRENE_CONTEXT_FACTORY_BY_RDBMS.get(rdbms.casefold())
+    if context_factory is None:
         raise ValueError(f"Unknown RDBMS '{rdbms}'")
 
-    importer_args = args_factory(logger, connection)
-    _import_sirene(logger, sirene_path, importer_args, process_names, bulk_copy)
+    importer_context = context_factory(logger, connection)
+
+
+    _import_sirene(logger, sirene_path, importer_context, process_names, bulk_copy)
 
 
 def _import_sirene(logger: logging.Logger, sirene_path: Path,
-                   importer_args: ImporterArgs,
+                   importer_context: ImporterContext,
                    process_names: Callable[[str], str],
                    bulk_copy: bool = True):
     """
     :param sirene_path: path to data and schemas
-    :param importer_args: objects to import data
+    :param importer_context: objects to import data
     :param process_names: a function to process field and table names
     :param bulk_copy: if True, use bulk copy if available
     """
 
     logger.debug("Import data with following parameters:"
-                 "sirene_path: %s, importer_args: %s, process_names: %s",
-                 sirene_path, importer_args, process_names)
+                 "sirene_path: %s, importer_context: %s, process_names: %s",
+                 sirene_path, importer_context, process_names)
 
     importer = SireneImporter(logger, data_sources(sirene_path),
-                              importer_args, process_names, bulk_copy)
+                              importer_context, process_names, bulk_copy)
     importer.execute()
 
 

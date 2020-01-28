@@ -17,15 +17,12 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-
 import unittest
-from logging import getLogger
 from pathlib import Path
 
 import pg8000
 
-from datagouv_tools.import_fantoir import import_with_temp, import_with_threads, \
-    postgres_args
+from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread
 
 
 class TestImportFantoir(unittest.TestCase):
@@ -35,19 +32,18 @@ class TestImportFantoir(unittest.TestCase):
 
     def test_import_temp(self):
         connection = pg8000.connect(user="postgres", password="postgres",
-                                  database="sirene")
-
-        importer_args = postgres_args(getLogger(), connection)
-        import_with_temp(self.path, importer_args)
+                                    database="sirene")
+        rdbms = "pg"
+        fantoir_path = self.path
+        import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
     def test_import_threads(self):
-        def get_args():
-            connection = pg8000.connect(user="postgres", password="postgres",
-                                  database="sirene")
-            return postgres_args(getLogger(), connection)
-
-        import_with_threads(self.path, get_args)
+        rdbms = "pg"
+        fantoir_path = self.path
+        import_fantoir_thread(
+            lambda: pg8000.connect(user="postgres", password="postgres",
+                                   database="sirene"), fantoir_path, rdbms)
 
 
 if __name__ == '__main__':

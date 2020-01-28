@@ -18,13 +18,14 @@
 #
 #
 from dataclasses import dataclass
+from typing import Callable
 
 from datagouv_tools.sql.generic import SQLTypeConverter, SQLIndexProvider, \
     QueryExecutor
 
 
 @dataclass
-class ImporterArgs:
+class ImporterContext:
     """
     :param type_converter: a function `field_name, table_name -> None or
                             a SQLType`
@@ -34,3 +35,9 @@ class ImporterArgs:
     index_provider: SQLIndexProvider
     query_executor: QueryExecutor
 
+
+@dataclass
+class ImporterThreadContext:
+    type_converter: SQLTypeConverter
+    index_provider: SQLIndexProvider
+    new_executor: Callable[[], QueryExecutor]
