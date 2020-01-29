@@ -103,7 +103,8 @@ def sanitize(text: str) -> str:
     """
     import unicodedata
     try:
-        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode(
+        text = unicodedata.normalize('NFKD', text).encode('ascii',
+                                                          'ignore').decode(
             'ascii')
     except UnicodeError:
         pass
@@ -125,6 +126,7 @@ class CSVStream(BytesIO):
     """
     A stream.
     """
+
     def __init__(self, name: str, header, queue,
                  encode=codecs.getencoder("ascii")):
         super().__init__()
@@ -137,6 +139,16 @@ class CSVStream(BytesIO):
 
     def send(self, data):
         self._queue.put(data)
+
+    def read(self, size=-1):
+        if size < 0 or size >= 8192:
+            b = bytearray(8192)
+            n = self.readinto(b)
+            return b[:n]
+        else:
+            b = bytearray(size)
+            n = self.readinto(b)
+            return b[:n]
 
     def readinto(self, b):
         i = len(self._remaining_bytes)
@@ -176,6 +188,5 @@ class CSVStream(BytesIO):
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()
-
-

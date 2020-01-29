@@ -17,8 +17,10 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
+import sqlite3
 import unittest
 from pathlib import Path
+import mysql.connector as mariadb
 
 import pg8000
 
@@ -30,7 +32,7 @@ class TestImportFantoir(unittest.TestCase):
         self.path = Path(
             r"/home/jferard/datagouv/fantoir/Fichier national FANTOIR (situation octobre 2019).zip")
 
-    def test_import_temp(self):
+    def test_import_temp_pg(self):
         connection = pg8000.connect(user="postgres", password="postgres",
                                     database="sirene")
         rdbms = "pg"
@@ -38,12 +40,34 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    def test_import_threads(self):
+    def test_import_sqlite(self):
+        connection = sqlite3.connect("fantoir.db")
+        rdbms = "sqlite"
+        fantoir_path = self.path
+        import_fantoir(connection, fantoir_path, rdbms)
+        connection.close()
+
+    def test_import_mariadb(self):
+        connection = mariadb.connect(user="sirene", password="yourpass",
+                                     database="sirene")
+        rdbms = "mariadb"
+        fantoir_path = self.path
+        import_fantoir(connection, fantoir_path, rdbms)
+        connection.close()
+
+    def test_import_thread_pg(self):
         rdbms = "pg"
         fantoir_path = self.path
         import_fantoir_thread(
             lambda: pg8000.connect(user="postgres", password="postgres",
                                    database="sirene"), fantoir_path, rdbms)
+
+    def test_import_thread_mariadb(self):
+        rdbms = "mariadb"
+        fantoir_path = self.path
+        import_fantoir_thread(
+            lambda: mariadb.connect(user="sirene", password="yourpass",
+                                    database="sirene"), fantoir_path, rdbms)
 
 
 if __name__ == '__main__':

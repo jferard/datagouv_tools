@@ -17,9 +17,9 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-from codecs import getreader
+from codecs import getreader, getencoder, getdecoder
 from csv import Dialect, reader as csv_reader
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
 from logging import Logger
 from typing import Iterable
 

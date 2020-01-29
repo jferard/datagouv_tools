@@ -195,10 +195,9 @@ def _import_with_threads(path_zipped, importer_context: ImporterThreadContext):
     for record_format in RECORD_FORMATS:
         csv_stream = CSVStream(record_format.name, record_format.header,
                                queue.Queue())
-        query_executor = importer_context.new_executor()
-        thread_info = ThreadInfo(query_executor, record_format, csv_stream)
+        thread_info = ThreadInfo(record_format, csv_stream)
         thread = create_thread(
-            target=consumer_factory(query_executor, thread_info))
+            target=consumer_factory(importer_context, thread_info))
         thread_info_by_name[record_format.name] = thread_info
         consumer_thread_by_name[record_format.name] = thread
 
@@ -213,17 +212,17 @@ def _import_with_threads(path_zipped, importer_context: ImporterThreadContext):
         thread.join()
 
 
-def dispatch_records_factory(path, consumer_thread_by_name):
+def dispatch_records_factory(path, thread_info_by_name):
     def dispatch_records():
         def send_to(name, csv_line):
-            consumer_thread_by_name[name].csv_stream.send(csv_line)
+            thread_info_by_name[name].csv_stream.send(csv_line)
 
         logger = getLogger()
 
         dispatcher = Dispatcher(logger, send_to)
         dispatcher.dispatch(path)
 
-        for name in consumer_thread_by_name:
+        for name in thread_info_by_name:
             send_to(name, None)
 
     return dispatch_records
@@ -231,21 +230,22 @@ def dispatch_records_factory(path, consumer_thread_by_name):
 
 @dataclass
 class ThreadInfo:
-    connection: Any
+    # connection: Any
     record_format: RecordFormat
     csv_stream: CSVStream
 
 
-def consumer_factory(query_executor: QueryExecutor,
+def consumer_factory(import_context: ImporterThreadContext,
                      thread_info: ThreadInfo):
     record_format = thread_info.record_format
 
-    def copy_table(table):
+    def copy_table(query_executor, table):
         dialect = get_dialect()
         query_executor.copy_stream(table, thread_info.csv_stream, 'latin-1',
                                    dialect)
 
     def consumer():
+        query_executor = import_context.new_executor()
         write_table(query_executor, record_format, copy_table)
         query_executor.close()
 
@@ -294,7 +294,7 @@ def dispatch_to_temp(path_zipped: Path):
 def write_table_from_temp(importer_context, record_format, path):
     executor = importer_context.query_executor
 
-    def copy_table(table):
+    def copy_table(executor, table):
         dialect = get_dialect()
         with open(path, "rb") as stream:
             executor.copy_stream(table, stream, 'latin-1', dialect)
@@ -356,12 +356,12 @@ class Dispatcher:
 
 
 def write_table(executor: QueryExecutor, record_format: RecordFormat,
-                copy_table: Callable[[SQLTable], None]):
+                copy_table: Callable[[QueryExecutor, SQLTable], None]):
     table = get_table(record_format)
     executor.create_table(table)
     executor.prepare_copy(table)
     executor.commit()
-    copy_table(table)
+    copy_table(executor, table)
     executor.finalize_copy(table)
     executor.commit()
     executor.create_indices(table)
@@ -380,7 +380,6 @@ def get_dialect():
 ########
 class FantoirSQLIndexProvider(SQLIndexProvider):
     def get_indices(self, fields: Iterable[SQLField]) -> Iterable[SQLIndex]:
-        table_name = next((f.table_name for f in fields), None)
         for field in fields:
             if field.starts_with("code_"):
                 yield SQLIndex(field.table_name, field.field_name,
@@ -414,10 +413,21 @@ def sqlite_context(logger, connection):
     )
 
 
+# Couldn't make sqlite_thread_context work.
+
 def mariadb_context(logger, connection):
     return ImporterContext(
         query_executor=MariaDBQueryExecutor(logger, connection,
                                             MariaDBQueryProvider()),
+        type_converter=DefaultSQLTypeConverter(),
+        index_provider=FantoirSQLIndexProvider(),
+    )
+
+
+def mariadb_thread_context(logger, new_connection):
+    return ImporterThreadContext(
+        new_executor=lambda: MariaDBQueryExecutor(logger, new_connection(),
+                                                    MariaDBQueryProvider()),
         type_converter=DefaultSQLTypeConverter(),
         index_provider=FantoirSQLIndexProvider(),
     )
@@ -448,6 +458,7 @@ register(postgres_context, "pg", "postgres", "postgresql")
 register_thread(postgres_thread_context, "pg", "postgres", "postgresql")
 register(sqlite_context, "sqlite", "sqlite3")
 register(mariadb_context, "maria", "mariadb", "mysql")
+register_thread(mariadb_thread_context, "maria", "mariadb", "mysql")
 
 
 def import_fantoir(connection, fantoir_path, rdbms):
