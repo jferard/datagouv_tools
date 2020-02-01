@@ -38,7 +38,7 @@ class TestImportFantoir(unittest.TestCase):
             (r"/home/jferard/datagouv/fantoir/"
              r"Fichier national FANTOIR (situation octobre 2019).zip"))
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_temp_pg(self):
         connection = pg8000.connect(user="postgres", password="postgres",
                                     database="sirene")
@@ -47,7 +47,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_sqlite(self):
         connection = sqlite3.connect("fantoir.db")
         rdbms = "sqlite"
@@ -55,7 +55,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_mariadb(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
@@ -64,7 +64,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_thread_pg(self):
         rdbms = "pg"
         fantoir_path = self.path
@@ -72,7 +72,7 @@ class TestImportFantoir(unittest.TestCase):
             lambda: pg8000.connect(user="postgres", password="postgres",
                                    database="sirene"), fantoir_path, rdbms)
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_thread_mariadb(self):
         rdbms = "mariadb"
         fantoir_path = self.path

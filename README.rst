@@ -84,4 +84,10 @@ If needed:
     ...$ venv/bin/pip install pytest-cov
     ...$ flake8 --exclude=venv && venv/bin/python3.7 -m pytest --cov-report term-missing --cov=import_sirene  && venv/bin/python3.7 -m pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene
 
+Or:
+
+.. code:: bash
+
+    ...$ python3.7 -m pytest --cov-report term-missing --cov=datagouv_tools  && python3.7 -m pytest --cov-report term-missing --cov-append --doctest-modules datagouv_tools --cov=datagouv_tools && flake8 --exclude=venv,.eggs
+
 
