@@ -19,13 +19,29 @@
 #
 
 import unittest
+from datetime import datetime
 
 from datagouv_tools.sql.sql_type import SQLTypes
 
 
 class TestSQLTypes(unittest.TestCase):
     def test_types(self):
-        SQLTypes.BOOLEAN
+        self.assertEqual("boolean", SQLTypes.BOOLEAN.to_str())
+        self.assertEqual(False, SQLTypes.BOOLEAN.type_value("False"))
+
+        self.assertEqual("character(10)", SQLTypes.CHARACTER.to_str('10'))
+        self.assertEqual("text", SQLTypes.CHARACTER.type_value("text"))
+
+        self.assertEqual("decimal(10, 2)", SQLTypes.DECIMAL.to_str('10', '2'))
+        self.assertEqual(10.5, SQLTypes.DECIMAL.type_value("10.5"))
+
+        self.assertEqual("timestamp without time zone",
+                         SQLTypes.TIMESTAMP_WITHOUT_TIME_ZONE.to_str())
+        self.assertEqual("timestamp(5) without time zone",
+                         SQLTypes.TIMESTAMP_WITHOUT_TIME_ZONE.to_str('5'))
+        self.assertEqual(datetime(2017, 1, 5, 10, 13, 15),
+                         SQLTypes.TIMESTAMP_WITHOUT_TIME_ZONE.type_value(
+                             "2017-01-05 10:13:15"))
 
 
 if __name__ == '__main__':
