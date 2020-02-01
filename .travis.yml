@@ -8,17 +8,17 @@ cache: pip
 
 before_install:
   - export PYTHONPATH=${PYTHONPATH}:/usr/lib/python3/dist-packages/
-  - sudo python --version
-  - sudo pip --version
+  - sudo python3 --version
+  - sudo pip3 --version
 
 # command to run tests and install dependencies
 install:
-  - sudo pip install --upgrade pip setuptools
-  - sudo pip install --upgrade pytest py codecov pytest-cov flake8
+  - sudo pip3 install --upgrade pip setuptools
+  - sudo pip3 install --upgrade pytest py codecov pytest-cov flake8
 
   # dependencies
-  - sudo python setup.py install
-  - sudo python setup.py test
+  - sudo python3 setup.py install
+  - sudo python3 setup.py test
 
 
 # script
