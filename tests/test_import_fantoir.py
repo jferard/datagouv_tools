@@ -21,7 +21,9 @@
 import sqlite3
 import unittest
 from pathlib import Path
-from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread
+from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread, \
+    get_record_format, get_first_empty_slice_by_record, HEADER_FORMAT, \
+    VOIE_FORMAT, DIRECTION_FORMAT, COMMUNE_FORMAT
 
 SKIP_IT = True
 
@@ -79,6 +81,26 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir_thread(
             lambda: mariadb.connect(user="sirene", password="yourpass",
                                     database="sirene"), fantoir_path, rdbms)
+
+    def test_get_first_empty_slice_by_record(self):
+        self.assertEqual({HEADER_FORMAT: slice(0, 10, None),
+                          DIRECTION_FORMAT: slice(3, 11, None),
+                          COMMUNE_FORMAT: slice(6, 10, None),
+                          VOIE_FORMAT: slice(41, 42, None), },
+                         get_first_empty_slice_by_record())
+
+    def test_get_record_format(self):
+        for line, expected in [
+            ('\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00ENEVERS'
+             '                  2019110120193080000000', HEADER_FORMAT),
+            ('010        AIN                                             '
+             '00000000000000 00000000000000', DIRECTION_FORMAT),
+            ("010001    WL'ABERGEMENT-CLEMENCIAT        N  3      0000825"
+             "00000000000000 00000001987001", COMMUNE_FORMAT),
+            ('010001A008WLOT BELLEVUE                   N  3  0          '
+             '00000000000000 00000002001351               000592   '
+             'BELLEVUE', VOIE_FORMAT)]:
+            self.assertEqual(expected, get_record_format(line))
 
 
 if __name__ == '__main__':
