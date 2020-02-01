@@ -1,3 +1,4 @@
+# encoding: utf-8
 #  DataGouv Tools. An utility to import some data from data.gouv.fr to
 #                  PostgreSQL and other DBMS.
 #        Copyright (C) 2020 J. Férard <https://github.com/jferard>
@@ -32,6 +33,7 @@ class TestImportFantoir(unittest.TestCase):
         self.path = Path(
             r"/home/jferard/datagouv/fantoir/Fichier national FANTOIR (situation octobre 2019).zip")
 
+    @unittest.skip("intregation test")
     def test_import_temp_pg(self):
         connection = pg8000.connect(user="postgres", password="postgres",
                                     database="sirene")
@@ -40,6 +42,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
+    @unittest.skip("intregation test")
     def test_import_sqlite(self):
         connection = sqlite3.connect("fantoir.db")
         rdbms = "sqlite"
@@ -47,6 +50,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
+    @unittest.skip("intregation test")
     def test_import_mariadb(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
@@ -55,6 +59,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
+    @unittest.skip("intregation test")
     def test_import_thread_pg(self):
         rdbms = "pg"
         fantoir_path = self.path
@@ -62,6 +67,7 @@ class TestImportFantoir(unittest.TestCase):
             lambda: pg8000.connect(user="postgres", password="postgres",
                                    database="sirene"), fantoir_path, rdbms)
 
+    @unittest.skip("intregation test")
     def test_import_thread_mariadb(self):
         rdbms = "mariadb"
         fantoir_path = self.path

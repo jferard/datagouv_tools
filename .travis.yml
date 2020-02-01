@@ -13,9 +13,10 @@ before_install:
 install:
   - pip install --upgrade pip
   - pip install --upgrade pytest py codecov pytest-cov flake8
-  - pytest --version # pytest-cov
+  - pip install --upgrade pg8000
 
   # dependencies
+  - python setup.py install
   - python setup.py test
 
 
