@@ -30,9 +30,14 @@ from logging import Logger
 from pathlib import Path
 from unittest.mock import Mock, call
 
-import mysql.connector as mariadb
-import pg8000
-from pg8000 import Connection
+try:
+    import mysql.connector as mariadb
+    import pg8000
+    from pg8000 import Connection
+except ModuleNotFoundError:
+    SKIP_IT = True
+else:
+    SKIP_IT = False
 
 from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
                                           to_snake,
@@ -54,7 +59,7 @@ class ImportSireneTest(unittest.TestCase):
     def setUp(self):
         self.path = Path(r"/home/jferard/datagouv/sirene")
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_postgres(self):
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
@@ -65,7 +70,7 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_sqlite(self):
         connection = sqlite3.connect('sirene.db')
         try:
@@ -74,7 +79,7 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_maria(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")

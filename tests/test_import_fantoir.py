@@ -21,9 +21,14 @@
 import sqlite3
 import unittest
 from pathlib import Path
-import mysql.connector as mariadb
 
-import pg8000
+try:
+    import mysql.connector as mariadb
+    import pg8000
+except ModuleNotFoundError:
+    SKIP_IT = True
+else:
+    SKIP_IT = False
 
 from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread
 
@@ -33,7 +38,7 @@ class TestImportFantoir(unittest.TestCase):
         self.path = Path(
             r"/home/jferard/datagouv/fantoir/Fichier national FANTOIR (situation octobre 2019).zip")
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_temp_pg(self):
         connection = pg8000.connect(user="postgres", password="postgres",
                                     database="sirene")
@@ -42,7 +47,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_sqlite(self):
         connection = sqlite3.connect("fantoir.db")
         rdbms = "sqlite"
@@ -50,7 +55,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_mariadb(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
@@ -59,7 +64,7 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_thread_pg(self):
         rdbms = "pg"
         fantoir_path = self.path
@@ -67,7 +72,7 @@ class TestImportFantoir(unittest.TestCase):
             lambda: pg8000.connect(user="postgres", password="postgres",
                                    database="sirene"), fantoir_path, rdbms)
 
-    @unittest.skip("intregation test")
+    @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_thread_mariadb(self):
         rdbms = "mariadb"
         fantoir_path = self.path
