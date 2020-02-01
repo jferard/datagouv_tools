@@ -21,22 +21,22 @@
 import sqlite3
 import unittest
 from pathlib import Path
+from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread
+
+SKIP_IT = True
 
 try:
     import mysql.connector as mariadb
     import pg8000
 except ModuleNotFoundError:
     SKIP_IT = True
-else:
-    SKIP_IT = False
-
-from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread
 
 
 class TestImportFantoir(unittest.TestCase):
     def setUp(self):
         self.path = Path(
-            r"/home/jferard/datagouv/fantoir/Fichier national FANTOIR (situation octobre 2019).zip")
+            (r"/home/jferard/datagouv/fantoir/"
+             r"Fichier national FANTOIR (situation octobre 2019).zip"))
 
     @unittest.skipIf(SKIP_IT, "intregation test")
     def test_import_temp_pg(self):

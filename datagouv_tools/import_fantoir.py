@@ -5,16 +5,17 @@ import logging
 import queue
 import tempfile
 import threading
-from dataclasses import dataclass
 from datetime import datetime
 from io import TextIOWrapper
-from itertools import islice
 from logging import Logger, getLogger
 from pathlib import Path
 from typing import Sequence, Any, Callable, Iterable
 from zipfile import ZipFile
 
-from datagouv_tools.import_generic import ImporterContext, ImporterThreadContext
+from dataclasses import dataclass
+
+from datagouv_tools.import_generic import (ImporterContext,
+                                           ImporterThreadContext)
 from datagouv_tools.sql.generic import (SQLTable, SQLField, QueryExecutor,
                                         DefaultSQLTypeConverter,
                                         SQLIndexProvider, SQLIndex,
@@ -151,7 +152,8 @@ VOIE_FORMAT = RecordFormat("voie", [
     FantoirField(89, 15, 'X', '', True),
     FantoirField(104, 5, 'X', 'Code identifiant MAJIC de la voie'),
     FantoirField(109, 1, 'X', 'Type de voie'),
-    # 1 : voie, 2 : ensemble immobilier, 3 : lieu-dit, 4 :pseudo-voie, 5 : voie provisoire
+    # 1 : voie, 2 : ensemble immobilier, 3 : lieu-dit,
+    # 4 :pseudo-voie, 5 : voie provisoire
     FantoirField(110, 1, 'X', 'Caractère du lieu_dit'),
     # 1 : lieu-dit bâti, 0 sinon
     FantoirField(111, 2, 'X', '', True),
@@ -398,7 +400,8 @@ def postgres_context(logger, connection):
 def postgres_thread_context(logger, new_connection: Callable[[], Any]):
     return ImporterThreadContext(
         new_executor=lambda: PostgreSQLQueryExecutor(logger, new_connection(),
-                                                     PostgreSQLQueryProvider()),
+                                                     PostgreSQLQueryProvider()
+                                                     ),
         type_converter=DefaultSQLTypeConverter(),
         index_provider=FantoirSQLIndexProvider(),
     )
@@ -427,7 +430,7 @@ def mariadb_context(logger, connection):
 def mariadb_thread_context(logger, new_connection):
     return ImporterThreadContext(
         new_executor=lambda: MariaDBQueryExecutor(logger, new_connection(),
-                                                    MariaDBQueryProvider()),
+                                                  MariaDBQueryProvider()),
         type_converter=DefaultSQLTypeConverter(),
         index_provider=FantoirSQLIndexProvider(),
     )

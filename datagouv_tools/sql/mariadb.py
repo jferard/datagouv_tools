@@ -88,6 +88,6 @@ class MariaDBQueryExecutor(QueryExecutor):
                    dialect: Dialect, count=0):
         stream = getreader(encoding)(stream)
         reader = csv_reader(stream, dialect)
-        _ = next(reader)
+        next(reader)
         query = self.query_provider.insert_all(table)
         self.executemany(query, list(reader))

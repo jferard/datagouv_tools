@@ -30,15 +30,6 @@ from logging import Logger
 from pathlib import Path
 from unittest.mock import Mock, call
 
-try:
-    import mysql.connector as mariadb
-    import pg8000
-    from pg8000 import Connection
-except ModuleNotFoundError:
-    SKIP_IT = True
-else:
-    SKIP_IT = False
-
 from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
                                           to_snake,
                                           NormalQueryExecutor,
@@ -53,6 +44,15 @@ from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
 from datagouv_tools.sql.generic import SQLField, SQLIndex, SQLTable
 from datagouv_tools.sql.postgresql import (PostgreSQLQueryProvider)
 from datagouv_tools.sql.sql_type import SQLIndexTypes, SQLTypes
+
+SKIP_IT = True
+
+try:
+    import mysql.connector as mariadb
+    import pg8000
+    from pg8000 import Connection
+except ModuleNotFoundError:
+    SKIP_IT = True
 
 
 class ImportSireneTest(unittest.TestCase):

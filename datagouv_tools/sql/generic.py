@@ -135,7 +135,8 @@ class QueryProvider(ABC):
         lines = [f'CREATE TABLE {table.name} (']
         for field in fields[:-1]:
             lines.append(
-                self._create_line(field, name_max_size, sql_type_max_size, ','))
+                self._create_line(field, name_max_size, sql_type_max_size, ',')
+            )
         lines.append(
             self._create_line(fields[-1], name_max_size,
                               sql_type_max_size, ''))
@@ -176,7 +177,8 @@ class QueryProvider(ABC):
         return ()
 
     def create_index(self, table: SQLTable, index: IN) -> Iterable[str]:
-        return f'CREATE INDEX {index.name} ON {table.name}({index.field_name})',
+        return (f'CREATE INDEX {index.name} ON '
+                f'{table.name}({index.field_name})'),
 
 
 class QueryExecutor(ABC):
