@@ -21,8 +21,8 @@ install:
 # script
 script:
   - "flake8 ."
-  - "pytest --cov-report term-missing --cov=import_sirene"
-  - "pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene"
+  - "pytest --cov-report term-missing --cov=datagouv_tools"
+  - "pytest --cov-report term-missing --cov-append --doctest-modules datagouv_tools --cov=datagouv_tools"
 
 after_success:
   - codecov
