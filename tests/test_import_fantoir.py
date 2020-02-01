@@ -21,9 +21,13 @@
 import sqlite3
 import unittest
 from pathlib import Path
-from datagouv_tools.import_fantoir import import_fantoir, import_fantoir_thread, \
-    get_record_format, get_first_empty_slice_by_record, HEADER_FORMAT, \
-    VOIE_FORMAT, DIRECTION_FORMAT, COMMUNE_FORMAT
+from datagouv_tools.import_fantoir import (import_fantoir,
+                                           import_fantoir_thread,
+                                           get_record_format,
+                                           get_first_empty_slice_by_record,
+                                           HEADER_FORMAT,
+                                           VOIE_FORMAT, DIRECTION_FORMAT,
+                                           COMMUNE_FORMAT)
 
 SKIP_IT = True
 
