@@ -11,7 +11,7 @@ before_install:
 
 # command to run tests and install dependencies
 install:
-  - pip install --upgrade pip setuptools
+#  - pip install --upgrade pip setuptools
   - pip install --upgrade pytest py codecov pytest-cov flake8
 
   # dependencies
