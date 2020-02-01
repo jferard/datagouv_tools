@@ -8,24 +8,21 @@ cache: pip
 
 before_install:
   - export PYTHONPATH=${PYTHONPATH}:/usr/lib/python3/dist-packages/
-  - sudo python3 --version
-  - sudo pip3 --version
 
 # command to run tests and install dependencies
 install:
-  - sudo pip3 install --upgrade pip setuptools
-  - sudo pip3 install --upgrade pytest py codecov pytest-cov flake8
+  - pip install --upgrade pip setuptools
+  - pip install --upgrade pytest py codecov pytest-cov flake8
 
   # dependencies
-  - sudo python3 setup.py install
-  - sudo python3 setup.py test
-
+#  - python setup.py install --user
+#  - python setup.py test
 
 # script
 script:
   - "flake8 ."
-  - "pytest --cov-report term-missing --cov=import_sirene"
-  - "pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene"
+  - "pytest --cov-report term-missing --cov=datagouv_tools"
+  - "pytest --cov-report term-missing --cov-append --doctest-modules datagouv_tools --cov=datagouv_tools"
 
 after_success:
   - codecov

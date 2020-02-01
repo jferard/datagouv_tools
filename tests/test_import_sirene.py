@@ -30,15 +30,6 @@ from logging import Logger
 from pathlib import Path
 from unittest.mock import Mock, call
 
-try:
-    import mysql.connector as mariadb
-    import pg8000
-    from pg8000 import Connection
-except ModuleNotFoundError:
-    SKIP_IT = True
-else:
-    SKIP_IT = False
-
 from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
                                           to_snake,
                                           NormalQueryExecutor,
@@ -54,12 +45,21 @@ from datagouv_tools.sql.generic import SQLField, SQLIndex, SQLTable
 from datagouv_tools.sql.postgresql import (PostgreSQLQueryProvider)
 from datagouv_tools.sql.sql_type import SQLIndexTypes, SQLTypes
 
+SKIP_IT = True
+
+try:
+    import mysql.connector as mariadb
+    import pg8000
+    from pg8000 import Connection
+except ModuleNotFoundError:
+    SKIP_IT = True
+
 
 class ImportSireneTest(unittest.TestCase):
     def setUp(self):
         self.path = Path(r"/home/jferard/datagouv/sirene")
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_postgres(self):
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
@@ -70,7 +70,7 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_sqlite(self):
         connection = sqlite3.connect('sirene.db')
         try:
@@ -79,7 +79,7 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skipIf(SKIP_IT, "intregation test")
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_maria(self):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
@@ -89,6 +89,7 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
+    @unittest.skipIf(SKIP_IT, "integration test")
     def test_dry_run(self):
         import_sirene(self.path, None, "postgresql")
 
@@ -142,9 +143,8 @@ class SQLFieldTest(unittest.TestCase):
 
     def test_compare(self):
         with self.assertRaises(ValueError):
-            _ = SQLField("t1", "f1", SQLTypes.TEXT, 1) < SQLField("t2", "f2",
-                                                                  SQLTypes.TEXT,
-                                                                  1)
+            SQLField("t1", "f1", SQLTypes.TEXT, 1) < SQLField(
+                "t2", "f2", SQLTypes.TEXT, 1)
         self.assertTrue(
             SQLField("t", "f1", SQLTypes.TEXT, 1) < SQLField("t", "f2",
                                                              SQLTypes.TEXT,

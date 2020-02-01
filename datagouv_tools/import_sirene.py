@@ -436,9 +436,8 @@ def import_sirene(sirene_path: Path, connection: Any, rdbms: str,
         raise ValueError(f"Unknown RDBMS '{rdbms}'")
 
     importer_context = context_factory(logger, connection)
-
-
-    _import_sirene(logger, sirene_path, importer_context, process_names, bulk_copy)
+    _import_sirene(logger, sirene_path, importer_context, process_names,
+                   bulk_copy)
 
 
 def _import_sirene(logger: logging.Logger, sirene_path: Path,
