@@ -15,8 +15,8 @@ install:
   - sudo pip install --upgrade pytest py codecov pytest-cov flake8
 
   # dependencies
-  - sudo python setup.py install
-  - sudo python setup.py test
+  - sudo python3 setup.py install
+  - sudo python3 setup.py test
 
 
 # script
