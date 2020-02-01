@@ -11,12 +11,12 @@ before_install:
 
 # command to run tests and install dependencies
 install:
-  - sudo python3 -m pip install --upgrade pip setuptools
+  - pip install --upgrade pip setuptools
   - pip install --upgrade pytest py codecov pytest-cov flake8
 
   # dependencies
-  - python setup.py install --user
-  - python setup.py test
+#  - python setup.py install --user
+#  - python setup.py test
 
 # script
 script:
