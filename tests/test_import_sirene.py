@@ -23,7 +23,6 @@
 #   This file is part of DataGouv Tools.
 
 # import SIRENE to PostgreSQL
-import csv
 import sqlite3
 import unittest
 from logging import Logger
@@ -31,7 +30,6 @@ from pathlib import Path
 from unittest.mock import Mock, call
 
 from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
-                                          to_snake,
                                           NormalQueryExecutor,
                                           DryRunQueryExecutor,
                                           BasicSireneTypeToSQLTypeConverter,
@@ -41,8 +39,7 @@ from datagouv_tools.import_sirene import (SireneSQLIndexProvider,
                                           RANK,
                                           CAPTION,
                                           import_sirene)
-from datagouv_tools.sql.generic import SQLField, SQLIndex, SQLTable
-from datagouv_tools.sql.postgresql import (PostgreSQLQueryProvider)
+from datagouv_tools.sql.generic import SQLField, SQLIndex
 from datagouv_tools.sql.sql_type import SQLIndexTypes, SQLTypes
 
 SKIP_IT = True
@@ -127,103 +124,6 @@ class IndexProviderTest(unittest.TestCase):
                               SQLField("tableName2", "other",
                                        SQLTypes.TEXT)
                               ])))
-
-
-class SQLFieldTest(unittest.TestCase):
-    def test_sort(self):
-        self.assertEqual(
-            [SQLField("t", "f1", SQLTypes.TEXT, 1),
-             SQLField("t", "f2", SQLTypes.TEXT, 2),
-             SQLField("t", "f3", SQLTypes.TEXT, 3)],
-            list(sorted([
-                SQLField("t", "f3", SQLTypes.TEXT, 3),
-                SQLField("t", "f1", SQLTypes.TEXT, 1),
-                SQLField("t", "f2", SQLTypes.TEXT, 2)
-            ])))
-
-    def test_compare(self):
-        with self.assertRaises(ValueError):
-            SQLField("t1", "f1", SQLTypes.TEXT, 1) < SQLField(
-                "t2", "f2", SQLTypes.TEXT, 1)
-        self.assertTrue(
-            SQLField("t", "f1", SQLTypes.TEXT, 1) < SQLField("t", "f2",
-                                                             SQLTypes.TEXT,
-                                                             2))
-
-    def test_process(self):
-        f = SQLField("CamelCaseTable", "camelCaseField", SQLTypes.TEXT)
-        self.assertEqual(
-            SQLField('camel_case_table', 'camel_case_field',
-                     SQLTypes.TEXT),
-            f.process(to_snake))
-
-
-class SQLIndexTest(unittest.TestCase):
-    def test_process(self):
-        f = SQLIndex("CamelCaseTable", "camelCaseField",
-                     SQLIndexTypes.HASH)
-        self.assertEqual(
-            SQLIndex('camel_case_table', 'camel_case_field',
-                     SQLIndexTypes.HASH),
-            f.process(to_snake))
-
-
-class TestQueryProvider(unittest.TestCase):
-    def setUp(self):
-        self.provider = PostgreSQLQueryProvider()
-        self.sql_field1 = SQLField("t", "f1", SQLTypes.TEXT,
-                                   comment="comment1")
-        self.sql_field2 = SQLField("t", "field_with_long_name2",
-                                   SQLTypes.NUMERIC)
-        self.sql_field3 = SQLField("t", "f3", SQLTypes.TEXT,
-                                   comment="comment2")
-
-    def test_drop(self):
-        self.assertEqual(('DROP TABLE IF EXISTS t',),
-                         self.provider.drop_table(SQLTable("t", (), ())))
-
-    def test_create_empty(self):
-        self.assertEqual(('CREATE TABLE t ()',),
-                         self.provider.create_table(SQLTable("t", [], [])))
-
-    def test_prepare_copy(self):
-        self.assertEqual(('TRUNCATE t',),
-                         self.provider.prepare_copy(SQLTable("t", [], [])))
-
-    def test_copy(self):
-        self.assertEqual(("COPY t FROM STDIN WITH "
-                          "(FORMAT CSV, HEADER TRUE, ENCODING 'UTF_8')",),
-                         self.provider.copy_stream(SQLTable("t", [], []),
-                                                   "utf-8", csv.excel))
-
-    def test_finalize_copy(self):
-        self.assertEqual(('ANALYZE t',),
-                         self.provider.finalize_copy(SQLTable("t", [], [])))
-
-    def test_create_one(self):
-        self.assertEqual(('CREATE TABLE t (\n'
-                          '    f1 text -- comment1\n'
-                          ')',),
-                         self.provider.create_table(
-                             SQLTable("t", [self.sql_field1], [])))
-
-    def test_create_three(self):
-        provider = PostgreSQLQueryProvider()
-        self.assertEqual(('CREATE TABLE t (\n'
-                          '    f1                    text,    -- comment1\n'
-                          '    field_with_long_name2 numeric,\n'
-                          '    f3                    text    -- comment2\n'
-                          ')',),
-                         provider.create_table(SQLTable("t", [self.sql_field1,
-                                                              self.sql_field2,
-                                                              self.sql_field3],
-                                                        [])))
-
-    def test_one_with_index(self):
-        sql_index = SQLIndex("t", "f", SQLIndexTypes.HASH)
-        self.assertEqual(('CREATE INDEX f_t_idx ON t USING hash(f)',),
-                         self.provider.create_index(SQLTable("t", [], []),
-                                                    sql_index))
 
 
 class QueryExecutorTest(unittest.TestCase):

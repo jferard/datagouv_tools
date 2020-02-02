@@ -20,27 +20,62 @@
 
 import unittest
 from csv import unix_dialect
-from io import BytesIO
 from logging import Logger
+from pathlib import Path
 from sqlite3 import Connection, Cursor
-from unittest import mock
 from unittest.mock import Mock, call
 
-from datagouv_tools.sql.generic import QueryProvider, SQLTable
-from datagouv_tools.sql.sqlite import SQLiteQueryExecutor
+from datagouv_tools.sql.generic import SQLTable, SQLField, \
+    SQLIndex
+from datagouv_tools.sql.mariadb import MariaDBQueryExecutor, \
+    MariaDBQueryProvider
+from datagouv_tools.sql.sql_type import SQLTypes, SQLIndexTypes
 
 
-class TestSQLiteExecutor(unittest.TestCase):
+class TestMariaDBProvider(unittest.TestCase):
+    def setUp(self):
+        self.field1 = SQLField("table", "field1", SQLTypes.BOOLEAN,
+                               comment="comment")
+        self.field2 = SQLField("table", "field2", SQLTypes.NUMERIC)
+        self.index = SQLIndex("table", "field1", SQLIndexTypes.HASH)
+        self.table = SQLTable("table", [self.field1, self.field2], [])
+        self.query_provider = MariaDBQueryProvider()
+
+    def test_copy_path(self):
+        self.assertEqual(("LOAD DATA INFILE 'path'\n"
+                          'INTO TABLE `table`\n'
+                          "CHARACTER SET 'UTF8'\n"
+                          "FIELDS TERMINATED BY ','\n"
+                          'OPTIONALLY ENCLOSED BY \'"\'\n'
+                          'IGNORE 1 LINES',),
+                         self.query_provider.copy_path(self.table,
+                                                       Path("path"),
+                                                       "utf-8", unix_dialect))
+
+    def test_create_other_index(self):
+        self.table = SQLTable("other_table", [], [self.index])
+        with self.assertRaises(AssertionError):
+            self.query_provider.create_index(self.table, self.index)
+
+    def test_create_index(self):
+        self.table = SQLTable("table", [], [self.index])
+        self.assertEqual(
+            ('CREATE INDEX field1_table_idx ON table(field1(255))',),
+            self.query_provider.create_index(self.table,
+                                             self.index))
+
+
+class TestMariaDBExecutor(unittest.TestCase):
     def setUp(self):
         self.logger: Logger = Mock()
         self.connection: Connection = Mock()
         self.cursor: Cursor = Mock()
-        self.query_provider = QueryProvider()
+        self.query_provider = MariaDBQueryProvider()
 
         self.connection.cursor.return_value = self.cursor
 
-        self.executor = SQLiteQueryExecutor(self.logger, self.connection,
-                                            self.query_provider)
+        self.executor = MariaDBQueryExecutor(self.logger, self.connection,
+                                             self.query_provider)
 
     def test_execute_empty(self):
         self.executor.execute([])
@@ -65,18 +100,6 @@ class TestSQLiteExecutor(unittest.TestCase):
         self.assertEqual([call.debug('commit')],
                          self.logger.mock_calls)
         self.assertEqual([call.cursor(), call.commit()],
-                         self.connection.mock_calls)
-
-    def test_copy_stream(self):
-        self.executor.copy_stream(SQLTable("table", [], []), BytesIO(b"data"),
-                                  "utf-8", unix_dialect)
-        self.assertEqual([call.debug('%s (%s, %s)',
-                                     'INSERT INTO table VALUES ()', mock.ANY,
-                                     {})],
-                         self.logger.mock_calls)
-        self.assertEqual([call.cursor(),
-                          call.cursor().executemany(
-                              'INSERT INTO table VALUES ()', mock.ANY)],
                          self.connection.mock_calls)
 
 

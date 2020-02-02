@@ -103,9 +103,6 @@ class SQLIndex:
         return self.type.to_str()
 
 
-IN = TypeVar('IN', bound=SQLIndex)
-
-
 @dataclass
 class SQLTable:
     name: str
@@ -176,7 +173,8 @@ class QueryProvider(ABC):
         """
         return ()
 
-    def create_index(self, table: SQLTable, index: IN) -> Iterable[str]:
+    def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
+        assert index.table_name == table.name
         return (f'CREATE INDEX {index.name} ON '
                 f'{table.name}({index.field_name})'),
 
