@@ -19,9 +19,14 @@
 #
 import csv
 import unittest
+from io import BytesIO
+from logging import Logger
+from unittest import mock
+from unittest.mock import Mock, call
 
 from datagouv_tools.sql.generic import SQLField, SQLTable, SQLIndex
-from datagouv_tools.sql.postgresql import PostgreSQLQueryProvider
+from datagouv_tools.sql.postgresql import PostgreSQLQueryProvider, \
+    PostgreSQLQueryExecutor
 from datagouv_tools.sql.sql_type import SQLTypes, SQLIndexTypes
 
 
@@ -53,6 +58,18 @@ class TestQueryProvider(unittest.TestCase):
                          self.provider.copy_stream(SQLTable("t", [], []),
                                                    "utf-8", csv.excel))
 
+    def test_copy_dialect(self):
+        dialect = csv.excel
+        dialect.delimiter = '\t'
+        dialect.doublequote = False
+        dialect.escapechar = '\\'
+        dialect.quotechar = "'"
+        self.assertEqual(("COPY t FROM STDIN WITH (FORMAT CSV, HEADER TRUE, "
+                          "ENCODING 'UTF_8', DELIMITER E'\t', ESCAPE E'\\\\', "
+                          "QUOTE E'\\'')",),
+                         self.provider.copy_stream(SQLTable("t", [], []),
+                                                   "utf-8", dialect))
+
     def test_finalize_copy(self):
         self.assertEqual(('ANALYZE t',),
                          self.provider.finalize_copy(SQLTable("t", [], [])))
@@ -81,6 +98,56 @@ class TestQueryProvider(unittest.TestCase):
         self.assertEqual(('CREATE INDEX f_t_idx ON t USING hash(f)',),
                          self.provider.create_index(SQLTable("t", [], []),
                                                     sql_index))
+
+
+class TestPostgreExecutor(unittest.TestCase):
+    def setUp(self):
+        self.logger: Logger = Mock()
+        self.connection = Mock()
+        self.cursor = Mock()
+        self.query_provider = PostgreSQLQueryProvider()
+
+        self.connection.cursor.return_value = self.cursor
+
+        self.executor = PostgreSQLQueryExecutor(self.logger, self.connection,
+                                                self.query_provider)
+
+    def test_execute_empty(self):
+        self.executor.execute([])
+        self.assertEqual([], self.logger.mock_calls)
+        self.assertEqual([call.cursor()], self.connection.mock_calls)
+
+    def test_execute(self):
+        self.executor.execute(["a query"])
+        self.assertEqual([call.debug("a query")], self.logger.mock_calls)
+        self.assertEqual([call.cursor(), call.cursor().execute('a query')],
+                         self.connection.mock_calls)
+
+    def test_executemany(self):
+        self.executor.executemany("a query")
+        self.assertEqual([call.debug('%s (%s, %s)', 'a query', (), {})],
+                         self.logger.mock_calls)
+        self.assertEqual([call.cursor(), call.cursor().executemany('a query')],
+                         self.connection.mock_calls)
+
+    def test_commit(self):
+        self.executor.commit()
+        self.assertEqual([call.debug('commit')],
+                         self.logger.mock_calls)
+        self.assertEqual([call.cursor(), call.commit()],
+                         self.connection.mock_calls)
+
+    def test_copy_stream(self):
+        self.executor.copy_stream(SQLTable("table", [], []), BytesIO(b"data"),
+                                  "utf-8", csv.unix_dialect)
+        self.assertEqual([call.debug("COPY table FROM STDIN WITH (FORMAT CSV, "
+                                     "HEADER TRUE, ENCODING 'UTF_8')")],
+                         self.logger.mock_calls)
+        self.assertEqual([call.cursor(),
+                          call.cursor().execute(
+                              "COPY table FROM STDIN WITH (FORMAT CSV, "
+                              "HEADER TRUE, ENCODING 'UTF_8')", stream=mock.ANY)],
+                         self.connection.mock_calls)
 
 
 if __name__ == '__main__':
