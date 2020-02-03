@@ -81,7 +81,8 @@ class TestGenericProvider(unittest.TestCase):
 
     def test_create_index(self):
         self.table = SQLTable("table", [], [self.index])
-        self.assertEqual(('CREATE INDEX field1_table_idx ON table(field1)',),
+        self.assertEqual(('DROP INDEX IF EXISTS field1_table_idx',
+                          'CREATE INDEX field1_table_idx ON table(field1)'),
                          self.provider.create_index(self.table, self.index))
 
 
@@ -122,6 +123,18 @@ class SQLIndexTest(unittest.TestCase):
             SQLIndex('camel_case_table', 'camel_case_field',
                      SQLIndexTypes.HASH),
             f.process(to_snake))
+
+    def test_index_name(self):
+        index = SQLIndex('camel_case_table', 'camel_case_field',
+                         SQLIndexTypes.HASH)
+        self.assertEqual("camel_case_field_camel_case_table_idx", index.name)
+
+    def test_long_index_name(self):
+        index = SQLIndex('camel_case_table' * 4, 'camel_case_field' * 4,
+                         SQLIndexTypes.HASH)
+        self.assertEqual(("cml_cs_fldcml_cs_fldcml_cs_fldcml_cs_fld_"
+                          "cml_cs_tblcml_cs_tblcml_cs_tblcml_cs_tbl_idx"),
+                         index.name)
 
 
 if __name__ == '__main__':

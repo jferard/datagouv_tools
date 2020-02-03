@@ -71,8 +71,9 @@ class PostgreSQLQueryProvider(QueryProvider):
 
     # override
     def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
-        return (f'CREATE INDEX {index.name} ON {table.name} '
-                f'USING {index.type_str}({index.field_name})',)
+        return (f'DROP INDEX IF EXISTS {index.name}',
+                f'CREATE INDEX {index.name} ON {table.name} '
+                f'USING {index.type_str}({index.field_name})')
 
 
 class PostgreSQLQueryExecutor(QueryExecutor):

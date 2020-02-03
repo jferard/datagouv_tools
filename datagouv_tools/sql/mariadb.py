@@ -47,8 +47,9 @@ class MariaDBQueryProvider(QueryProvider):
 
     def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
         assert index.table_name == table.name
-        return (f'CREATE INDEX {index.name} ON {table.name}'
-                f'({index.field_name}(255))'),
+        return (f'DROP INDEX IF EXISTS {index.name} ON {table.name}',
+                f'CREATE INDEX {index.name} ON {table.name}'
+                f'({index.field_name}(255))')
 
 
 class MariaDBQueryExecutor(QueryExecutor):

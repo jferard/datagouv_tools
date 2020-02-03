@@ -34,6 +34,7 @@ from datagouv_tools.sql.sql_type import SQLTypes, SQLIndexTypes
 
 class TestMariaDBProvider(unittest.TestCase):
     def setUp(self):
+        print("SETUP MDB", unix_dialect.__dict__)
         self.field1 = SQLField("table", "field1", SQLTypes.BOOLEAN,
                                comment="comment")
         self.field2 = SQLField("table", "field2", SQLTypes.NUMERIC)
@@ -42,6 +43,7 @@ class TestMariaDBProvider(unittest.TestCase):
         self.query_provider = MariaDBQueryProvider()
 
     def test_copy_path(self):
+        print(unix_dialect.__dict__)
         self.assertEqual(("LOAD DATA INFILE 'path'\n"
                           'INTO TABLE `table`\n'
                           "CHARACTER SET 'UTF8'\n"
@@ -60,7 +62,8 @@ class TestMariaDBProvider(unittest.TestCase):
     def test_create_index(self):
         self.table = SQLTable("table", [], [self.index])
         self.assertEqual(
-            ('CREATE INDEX field1_table_idx ON table(field1(255))',),
+            ('DROP INDEX IF EXISTS field1_table_idx ON table',
+             'CREATE INDEX field1_table_idx ON table(field1(255))'),
             self.query_provider.create_index(self.table,
                                              self.index))
 

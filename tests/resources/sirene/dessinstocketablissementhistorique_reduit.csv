@@ -1,0 +1,19 @@
+Nom,Libellé,Longueur,Type,Ordre
+activitePrincipaleEtablissement,Activité principale de l'établissement pendant la période,6,Liste de codes,14
+caractereEmployeurEtablissement,Caractère employeur de l’établissement,1,Liste de codes,17
+changementActivitePrincipaleEtablissement,Indicatrice de changement de l’activité principale de l’établissement,5,Texte,16
+changementCaractereEmployeurEtablissement,Indicatrice de changement du caractère employeur de l’établissement,5,Texte,18
+changementDenominationUsuelleEtablissement,Indicatrice de changement de la dénomination usuelle de l’unité légale,5,Texte,13
+changementEnseigneEtablissement,Indicatrice de changement de l’enseigne de l’établissement,5,Texte,11
+changementEtatAdministratifEtablissement,Indicatrice de changement de l’état administratif de l’établissement,5,Texte,7
+dateDebut,Date de début d'une période d'historique d'un établissement,10,Date,5
+dateFin,Date de fin d'une période d'historique d'un établissement,10,Date,4
+denominationUsuelleEtablissement,Dénomination usuelle de l’établissement,100,Texte,12
+enseigne1Etablissement,Première ligne d’enseigne de l’établissement,50,Texte,8
+enseigne2Etablissement,Deuxième ligne d’enseigne de l’établissement,50,Texte,9
+enseigne3Etablissement,Troisième ligne d’enseigne de l’établissement,50,Texte,10
+etatAdministratifEtablissement,État administratif de l’établissement,1,Liste de codes,6
+nic,Numéro interne de classement de l'établissement,5,Texte,2
+nomenclatureActivitePrincipaleEtablissement,Nomenclature d’activité de la variable activitePrincipaleEtablissement,8,Liste de codes,15
+siren,Numéro Siren,9,Texte,1
+siret,Numéro Siret,14,Texte,3

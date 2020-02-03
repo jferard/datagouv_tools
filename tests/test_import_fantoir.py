@@ -21,6 +21,7 @@
 import sqlite3
 import unittest
 from pathlib import Path
+
 from datagouv_tools.import_fantoir import (import_fantoir,
                                            import_fantoir_thread,
                                            get_record_format,
@@ -31,18 +32,16 @@ from datagouv_tools.import_fantoir import (import_fantoir,
 
 SKIP_IT = True
 
-try:
+if not SKIP_IT:
     import mysql.connector as mariadb
     import pg8000
-except ModuleNotFoundError:
-    SKIP_IT = True
 
 
 class TestImportFantoir(unittest.TestCase):
     def setUp(self):
         self.path = Path(
-            (r"/home/jferard/datagouv/fantoir/"
-             r"Fichier national FANTOIR (situation octobre 2019).zip"))
+            Path(__file__).parent, "resources", "fantoir",
+            r"Fichier national FANTOIR (situation octobre 2019)_reduit.zip")
 
     @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_temp_pg(self):
@@ -53,7 +52,6 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
 
-    @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_sqlite(self):
         connection = sqlite3.connect("fantoir.db")
         rdbms = "sqlite"

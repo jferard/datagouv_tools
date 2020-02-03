@@ -1,0 +1,27 @@
+Nom,Libellé,Longueur,Type,Ordre
+activitePrincipaleUniteLegale,Activité principale de l’unité légale,6,Liste de codes,18
+caractereEmployeurUniteLegale,Caractère employeur de l’unité légale,1,Liste de codes,25
+categorieJuridiqueUniteLegale,Catégorie juridique de l’unité légale,4,Liste de codes,16
+changementActivitePrincipaleUniteLegale,Indicatrice de changement de l’activité principale de l’unité légale,5,Texte,20
+changementCaractereEmployeurUniteLegale,Indicatrice de changement du caractère employeur de l’unité légale,5,Texte,26
+changementCategorieJuridiqueUniteLegale,Indicatrice de changement de la catégorie juridique de l’unité légale,5,Texte,17
+changementDenominationUniteLegale,Indicatrice de changement de la dénomination de l’unité légale,5,Texte,11
+changementDenominationUsuelleUniteLegale,Indicatrice de changement de la dénomination usuelle de l’unité légale,5,Texte,15
+changementEconomieSocialeSolidaireUniteLegale,Indicatrice de changement de l’appartenance au champ de l’économie sociale et solidaire,5,Texte,24
+changementEtatAdministratifUniteLegale,Indicatrice de changement de l’état administratif de l’unité légale,5,Texte,5
+changementNicSiegeUniteLegale,Indicatrice de changement du nic du siège de l’unité légale,5,Texte,22
+changementNomUniteLegale,Indicatrice de changement du nom de la personne physique,5,Texte,7
+changementNomUsageUniteLegale,Indicatrice de changement du nom d’usage de la personne physique,5,Texte,9
+dateDebut,Date de début d'une période d'historique d'une unité légale,10,Date,3
+dateFin,Date de fin d'une période d'historique d'une unité légale,10,Date,2
+denominationUniteLegale,Dénomination de l’unité légale,120,Texte,10
+denominationUsuelle1UniteLegale,Dénomination usuelle de l’unité légale,70,Texte,12
+denominationUsuelle2UniteLegale,Dénomination usuelle de l’unité légale – deuxième champ,70,Texte,13
+denominationUsuelle3UniteLegale,Dénomination usuelle de l’unité légale – troisième champ,70,Texte,14
+economieSocialeSolidaireUniteLegale,Appartenance au champ de l’économie sociale et solidaire,1,Liste de codes,23
+etatAdministratifUniteLegale,État administratif de l’unité légale,1,Liste de codes,4
+nicSiegeUniteLegale,Numéro interne de classement (Nic) de l’unité légale,5,Texte,21
+nomenclatureActivitePrincipaleUniteLegale,Nomenclature d’activité de la variable activitePrincipaleUniteLegale,8,Liste de codes,19
+nomUniteLegale,Nom de naissance de la personne physique,100,Texte,6
+nomUsageUniteLegale,Nom d’usage de la personne physique,100,Texte,8
+siren,Numéro Siren,9,Texte,1

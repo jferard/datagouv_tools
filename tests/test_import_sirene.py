@@ -44,17 +44,15 @@ from datagouv_tools.sql.sql_type import SQLIndexTypes, SQLTypes
 
 SKIP_IT = True
 
-try:
+if not SKIP_IT:
     import mysql.connector as mariadb
     import pg8000
     from pg8000 import Connection
-except ModuleNotFoundError:
-    SKIP_IT = True
 
 
 class ImportSireneTest(unittest.TestCase):
     def setUp(self):
-        self.path = Path(r"/home/jferard/datagouv/sirene")
+        self.path = Path(Path(__file__).parent, "resources", "sirene")
 
     @unittest.skipIf(SKIP_IT, "integration test")
     def test_postgres(self):
@@ -67,7 +65,6 @@ class ImportSireneTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-    @unittest.skipIf(SKIP_IT, "integration test")
     def test_sqlite(self):
         connection = sqlite3.connect('sirene.db')
         try:

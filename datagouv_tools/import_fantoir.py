@@ -5,14 +5,14 @@ import logging
 import queue
 import tempfile
 import threading
+from _csv import QUOTE_ALL
+from codecs import getreader
+from dataclasses import dataclass
 from datetime import datetime
-from io import TextIOWrapper
 from logging import Logger, getLogger
 from pathlib import Path
 from typing import Sequence, Any, Callable, Iterable
 from zipfile import ZipFile
-
-from dataclasses import dataclass
 
 from datagouv_tools.import_generic import (ImporterContext,
                                            ImporterThreadContext)
@@ -219,7 +219,7 @@ def dispatch_records_factory(path, thread_info_by_name):
         def send_to(name, csv_line):
             thread_info_by_name[name].csv_stream.send(csv_line)
 
-        logger = getLogger()
+        logger = getLogger("datagouv_tools")
 
         dispatcher = Dispatcher(logger, send_to)
         dispatcher.dispatch(path)
@@ -242,7 +242,7 @@ def consumer_factory(import_context: ImporterThreadContext,
     record_format = thread_info.record_format
 
     def copy_table(query_executor, table):
-        dialect = get_dialect()
+        dialect = fantoir_dialect
         query_executor.copy_stream(table, thread_info.csv_stream, 'latin-1',
                                    dialect)
 
@@ -297,7 +297,7 @@ def write_table_from_temp(importer_context, record_format, path):
     executor = importer_context.query_executor
 
     def copy_table(executor, table):
-        dialect = get_dialect()
+        dialect = fantoir_dialect
         with open(path, "rb") as stream:
             executor.copy_stream(table, stream, 'latin-1', dialect)
 
@@ -331,13 +331,15 @@ class Dispatcher:
         self._send_to = send_to
 
     def dispatch(self, path):
+        #        source = path.open('rb')
         with ZipFile(path, 'r') as zipped:
             first = zipped.infolist()[0]
             with zipped.open(first) as stream:
                 self._dispatch_byte_stream(stream)
+        #        source.close()
 
     def _dispatch_byte_stream(self, stream):
-        f = TextIOWrapper(stream, 'ascii')
+        f = getreader('ascii')(stream)
         count = 0
         t = datetime.now()
         for line in f:
@@ -370,11 +372,13 @@ def write_table(executor: QueryExecutor, record_format: RecordFormat,
     executor.commit()
 
 
-def get_dialect():
-    dialect = csv.unix_dialect
-    dialect.delimiter = "\t"
-    dialect.quotechar = "\b"
-    return dialect
+class fantoir_dialect(csv.Dialect):
+    delimiter = '\t'
+    quotechar = '\b'
+    doublequote = True
+    skipinitialspace = False
+    lineterminator = '\n'
+    quoting = QUOTE_ALL
 
 
 ########
@@ -472,7 +476,6 @@ def import_fantoir(connection, fantoir_path, rdbms):
                  "fantoir_path: %s, connection: %s, rdbms: %s",
                  fantoir_path,
                  connection, rdbms)
-    logger = logging.getLogger("datagouv_tools")
     context_factory = _FANTOIR_CONTEXT_FACTORY_BY_RDBMS.get(
         rdbms.casefold())
     if context_factory is None:
@@ -486,7 +489,6 @@ def import_fantoir_thread(new_connection, fantoir_path, rdbms):
     logger.debug("Import data with following parameters:"
                  "fantoir_path: %s, rdbms: %s",
                  fantoir_path, rdbms)
-    logger = logging.getLogger("datagouv_tools")
     context_factory = _FANTOIR_THREAD_CONTEXT_FACTORY_BY_RDBMS.get(
         rdbms.casefold())
     if context_factory is None:

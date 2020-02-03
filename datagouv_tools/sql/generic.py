@@ -96,7 +96,15 @@ class SQLIndex:
         """
         :return: the name of the index, that is field name + table name + "idx"
         """
-        return f'{self.field_name}_{self.table_name}_idx'
+        table = str.maketrans(dict.fromkeys('aeiou'))
+        if len(self.field_name) + len(self.table_name) > 64:
+            table_name = self.table_name.translate(table)
+            field_name = self.field_name.translate(table)
+        else:
+            table_name = self.table_name
+            field_name = self.field_name
+
+        return f'{field_name}_{table_name}_idx'
 
     @property
     def type_str(self) -> str:
@@ -175,8 +183,9 @@ class QueryProvider(ABC):
 
     def create_index(self, table: SQLTable, index: SQLIndex) -> Iterable[str]:
         assert index.table_name == table.name
-        return (f'CREATE INDEX {index.name} ON '
-                f'{table.name}({index.field_name})'),
+        return (f'DROP INDEX IF EXISTS {index.name}',
+                f'CREATE INDEX {index.name} ON '
+                f'{table.name}({index.field_name})')
 
 
 class QueryExecutor(ABC):

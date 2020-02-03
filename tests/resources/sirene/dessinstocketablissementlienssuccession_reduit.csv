@@ -1,0 +1,7 @@
+Nom,Libellé,Longueur,Type,Ordre
+continuiteEconomique,Indicatrice de continuité économique entre les deux établissements,5,Texte,5
+dateDernierTraitementLienSuccession,Date de traitement du lien de succession,19,Date,6
+dateLienSuccession,Date d'effet du lien de succession,10,Date,3
+siretEtablissementPredecesseur,Numéro Siret de l'établissement prédécesseur,14,Texte,1
+siretEtablissementSuccesseur,Numéro Siret de l'établissement successeur,14,Texte,2
+transfertSiege,Indicatrice de transfert de siège,5,Texte,4
