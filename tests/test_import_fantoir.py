@@ -18,9 +18,11 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
+import logging
 import sqlite3
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, call
 
 from datagouv_tools.import_fantoir import (import_fantoir,
                                            import_fantoir_thread,
@@ -29,6 +31,7 @@ from datagouv_tools.import_fantoir import (import_fantoir,
                                            HEADER_FORMAT,
                                            VOIE_FORMAT, DIRECTION_FORMAT,
                                            COMMUNE_FORMAT)
+from datagouv_tools.sql.generic import FakeConnection
 
 SKIP_IT = True
 
@@ -58,6 +61,100 @@ class TestImportFantoir(unittest.TestCase):
         fantoir_path = self.path
         import_fantoir(connection, fantoir_path, rdbms)
         connection.close()
+
+    def test_import_thread(self):
+        logger = logging.getLogger("datagouv_tools")
+        logger.setLevel(logging.INFO)
+        rdbms = "pg"
+        fantoir_path = self.path
+        logger: logging.Logger = Mock()
+        import_fantoir_thread(
+            lambda: FakeConnection(logger), fantoir_path, rdbms)
+
+        for message in [
+            'DRY RUN: cursor.execute(DROP TABLE IF EXISTS header)',
+            'DRY RUN: cursor.execute(DROP TABLE IF EXISTS direction)',
+            'DRY RUN: cursor.execute(DROP TABLE IF EXISTS commune)',
+            'DRY RUN: cursor.execute(DROP TABLE IF EXISTS voie)',
+            'DRY RUN: cursor.execute(CREATE TABLE header (\n'
+            '    libelle_du_centre_de_production_du_fichier text,\n'
+            '    date_de_situation_du_fichier               text,\n'
+            '    date_de_production_du_fichier              text\n'
+            '))',
+            'DRY RUN: cursor.execute(CREATE TABLE direction (\n'
+            '    code_departement  text,\n'
+            '    code_direction    text,\n'
+            '    libelle_direction text\n))',
+            'DRY RUN: cursor.execute(CREATE TABLE commune (\n'
+            '    code_departement             text,\n'
+            '    code_direction               text,\n'
+            '    code_commune                 text,\n'
+            '    cle_rivoli                   text,\n'
+            '    libelle_commune              text,\n'
+            '    type_de_la_commune           text,\n'
+            '    caractere_rur                text,\n'
+            '    caractere_de_population      text,\n'
+            '    population_reelle            text,\n'
+            '    population_a_part            text,\n'
+            '    population_fictive           text,\n'
+            '    caractere_dannulation        text,\n'
+            '    date_dannulation             text,\n'
+            '    date_de_creation_de_larticle text\n'
+            '))',
+            'DRY RUN: cursor.execute(CREATE TABLE voie (\n'
+            '    code_departement                        '
+            '                   text,\n'
+            '    code_direction                          '
+            '                   text,\n'
+            '    code_commune                            '
+            '                   text,\n'
+            '    identifiant_de_la_voie_dans_la_commune  '
+            '                   text,\n'
+            '    cle_rivoli                              '
+            '                   text,\n'
+            '    code_nature_de_voie                     '
+            '                   text,\n'
+            '    libelle_voie                            '
+            '                   text,\n'
+            '    type_de_la_commune                      '
+            '                   text,\n'
+            '    caractere_rur                           '
+            '                   text,\n'
+            '    caractere_de_voie                       '
+            '                   text,\n'
+            '    caractere_de_population                 '
+            '                   text,\n'
+            '    population_a_part                       '
+            '                   text,\n'
+            '    population_fictive                      '
+            '                   text,\n'
+            '    caractere_dannulation                   '
+            '                   text,\n'
+            '    date_dannulation                        '
+            '                   text,\n'
+            '    date_de_creation_de_larticle            '
+            '                   text,\n'
+            '    code_identifiant_majic_de_la_voie       '
+            '                   text,\n'
+            '    type_de_voie                            '
+            '                   text,\n'
+            '    caractere_du_lieu_dit                   '
+            '                   text,\n'
+            '    dernier_mot_entierement_alphabetique_du_'
+            'libelle_de_la_voie text\n'
+            '))',
+            'DRY RUN: cursor.execute(TRUNCATE header)',
+            'DRY RUN: cursor.execute(TRUNCATE direction)',
+            'DRY RUN: cursor.execute(TRUNCATE commune)',
+            'DRY RUN: cursor.execute(TRUNCATE voie)',
+            'DRY RUN: cursor.execute(ANALYZE header)',
+            'DRY RUN: cursor.execute(ANALYZE direction)',
+            'DRY RUN: cursor.execute(ANALYZE commune)',
+            'DRY RUN: cursor.execute(ANALYZE voie)',
+            'DRY RUN: connection.commit()',
+            'DRY RUN: connection.close()'
+        ]:
+            self.assertTrue(call.info(message) in logger.mock_calls)
 
     @unittest.skipIf(SKIP_IT, "integration test")
     def test_import_mariadb(self):

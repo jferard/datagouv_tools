@@ -5,23 +5,44 @@ License: GPL v3
 
 The SIRENE database is a comprehensive database on the companies registred in France.
 
-Usage
-~~~~~
+Supported databases
+~~~~~~~~~~~~~~~~~~~
+* PostgreSQL
+* SQLite
+* MariaDB
+
+SIRENE
+~~~~~~
 1. Download CSV and ZIP files from https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
 2. Execute
 
 .. code:: python
 
-        path = Path(r"/path/to/SIRENE")
+        path = Path(r"/path/to/sirene/directory")
         connection = pg8000.connect(user="sirene", password="yourpass",
                                     database="sirene")
         try:
-            import_sirene(path, connection)
+            import_sirene(path, connection, "postgresql")
         finally:
             connection.commit()
             connection.close()
 
+FANTOIR
+~~~~~~~
+1. Dowload ZIP file from https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
+
+2. Execute
+
+.. code:: python
+
+        path = Path(r"/path/to/FANTOIR.zip")
+        connection = pg8000.connect(user="postgres", password="postgres",
+                                    database="sirene")
+        try:
+            import_fantoir(connection, fantoir_path, "postgresql")
+        finally:
+            connection.close()
 
 
 Note on Ubuntu
