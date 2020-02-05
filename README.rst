@@ -23,7 +23,17 @@ SIRENE
 ~~~~~~
 1. Téléchargez les fichiers CSV et ZIP depuis https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
-2. Exécutez
+2. Exécutez les lignes suivantes :
+
+.. code:: bash
+
+    ...$ source venv/bin/activate # if you use venv
+    ...$ python3.7 setup.py install
+    ...$ dg_script -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
+
+D'autres options sont disponibles.
+
+Dans un programme :
 
 .. code:: python
 
@@ -40,7 +50,15 @@ FANTOIR
 ~~~~~~~
 1. Téléchargez le fichier ZIP depuis https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
 
-2. Exécutez
+2. Exécutez les lignes suivantes :
+
+.. code:: bash
+
+    ...$ source venv/bin/activate # if you use venv
+    ...$ python3.7 setup.py install
+    ...$ dg_script -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
+
+Dans un programme
 
 .. code:: python
 
@@ -72,15 +90,6 @@ Pour réaliser l'import sous Ubuntu, vous devez créer une base de données `sir
     postgres=# GRANT ALL ON DATABASE sirene TO sirene;
     GRANT
     postgres=# \q
-
-Et exécuter le script en tant qu'utilisateur sytème `sirene`.
-
-.. code:: bash
-
-    ...$ sudo -u sirene source venv/bin/activate # if you use venv
-    ...$ sudo -u sirene python3.7 script.py
-
-Ou `script.py` est le script ci-dessus.
 
 MariaDB
 -------

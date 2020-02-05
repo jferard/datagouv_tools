@@ -19,4 +19,6 @@
 
 from setuptools import setup
 
-setup()
+setup(
+    packages=['datagouv_tools', 'datagouv_tools.sql']
+)

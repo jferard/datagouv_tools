@@ -23,7 +23,15 @@ SIRENE
 ~~~~~~
 1. Download CSV and ZIP files from https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
-2. Execute
+2. And run the following lines.
+
+.. code:: bash
+
+    ...$ source venv/bin/activate # if you use venv
+    ...$ python3.7 setup.py install
+    ...$ dg_script -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
+
+In a program:
 
 .. code:: python
 
@@ -40,7 +48,15 @@ FANTOIR
 ~~~~~~~
 1. Dowload ZIP file from https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
 
-2. Execute
+2. And run the following lines.
+
+.. code:: bash
+
+    ...$ source venv/bin/activate # if you use venv
+    ...$ python3.7 setup.py install
+    ...$ dg_script -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
+
+In a program:
 
 .. code:: python
 
@@ -72,15 +88,6 @@ To run the script on Ubuntu, you have to create a database `sirene` and a user `
     postgres=# GRANT ALL ON DATABASE sirene TO sirene;
     GRANT
     postgres=# \q
-
-And to run your script as sytem `sirene` user.
-
-.. code:: bash
-
-    ...$ sudo -u sirene source venv/bin/activate # if you use venv
-    ...$ sudo -u sirene python3.7 script.py
-
-Where `script.py` is the script above.
 
 MariaDB
 -------

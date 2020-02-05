@@ -17,4 +17,27 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
+from dataclasses import dataclass
+from typing import Callable
 
+from datagouv_tools.sql.generic import SQLTypeConverter, SQLIndexProvider, \
+    QueryExecutor
+
+
+@dataclass
+class ImporterContext:
+    """
+    :param type_converter: a function `field_name, table_name -> None or
+                            a SQLType`
+    :param index_provider: a index provider
+    """
+    type_converter: SQLTypeConverter
+    index_provider: SQLIndexProvider
+    query_executor: QueryExecutor
+
+
+@dataclass
+class ImporterThreadContext:
+    type_converter: SQLTypeConverter
+    index_provider: SQLIndexProvider
+    new_executor: Callable[[], QueryExecutor]

@@ -60,7 +60,7 @@ class ImportSireneTest(unittest.TestCase):
                                     database="sirene")
         pg8000.paramstyle = "qmark"
         try:
-            import_sirene(self.path, connection, "postgresql")
+            import_sirene(connection, self.path, "postgresql")
         finally:
             connection.commit()
             connection.close()
@@ -68,7 +68,7 @@ class ImportSireneTest(unittest.TestCase):
     def test_sqlite(self):
         connection = sqlite3.connect('sirene.db')
         try:
-            import_sirene(self.path, connection, "sqlite")
+            import_sirene(connection, self.path, "sqlite")
         finally:
             connection.commit()
             connection.close()
@@ -78,14 +78,14 @@ class ImportSireneTest(unittest.TestCase):
         connection = mariadb.connect(user="sirene", password="yourpass",
                                      database="sirene")
         try:
-            import_sirene(self.path, connection, "mariadb")
+            import_sirene(connection, self.path, "mariadb")
         finally:
             connection.commit()
             connection.close()
 
     @unittest.skipIf(SKIP_IT, "integration test")
     def test_dry_run(self):
-        import_sirene(self.path, None, "postgresql")
+        import_sirene(None, self.path, "postgresql")
 
 
 class IndexProviderTest(unittest.TestCase):
