@@ -3,27 +3,27 @@ DataGouv Tools. An utility to import  some data.gouv.fr data to PostgreSQL and o
 
 License: GPL v3
 
-`English version of README <README-en.rst>`_
 
+Goal
+~~~~
 
-Objectif
-~~~~~~~~
-`La base Sirene des entreprises et de leurs établissements <https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/>`_
-et le `Fichier FANTOIR des voies et lieux-dits <https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/>`_
-sont disponibles sur le site https://www.data.gouv.fr. Leur exploitation sous la forme CSV n'est
-pas aisée. Le projet *DataGouv Tools* a pour but de faciliter l'import des ces données dans un SGBD.
+`The SIRENE database <https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/>`_
+(a comprehensive database on the companies registred in France) and the `FANTOIR file <https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/>`_
+are available on https://www.data.gouv.fr.
 
-SGDB supportés
-~~~~~~~~~~~~~~
+The *DataGouv Tools* aims to facilitate the import of those data in a RDBMS.
+
+Supported RDBMS
+~~~~~~~~~~~~~~~
 * PostgreSQL
 * SQLite
 * MariaDB
 
 SIRENE
 ~~~~~~
-1. Téléchargez les fichiers CSV et ZIP depuis https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
+1. Download CSV and ZIP files from https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
-2. Exécutez
+2. Execute
 
 .. code:: python
 
@@ -38,9 +38,9 @@ SIRENE
 
 FANTOIR
 ~~~~~~~
-1. Téléchargez le fichier ZIP depuis https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
+1. Dowload ZIP file from https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
 
-2. Exécutez
+2. Execute
 
 .. code:: python
 
@@ -53,11 +53,11 @@ FANTOIR
             connection.close()
 
 
-Note sur Ubuntu
-~~~~~~~~~~~~~~~
+Note on Ubuntu
+~~~~~~~~~~~~~~
 PostgreSQL
 ----------
-Pour réaliser l'import sous Ubuntu, vous devez créer une base de données `sirene` et un utilisateur `sirene`:
+To run the script on Ubuntu, you have to create a database `sirene` and a user `sirene`:
 
 .. code:: bash
 
@@ -73,14 +73,14 @@ Pour réaliser l'import sous Ubuntu, vous devez créer une base de données `sir
     GRANT
     postgres=# \q
 
-Et exécuter le script en tant qu'utilisateur sytème `sirene`.
+And to run your script as sytem `sirene` user.
 
 .. code:: bash
 
     ...$ sudo -u sirene source venv/bin/activate # if you use venv
     ...$ sudo -u sirene python3.7 script.py
 
-Ou `script.py` est le script ci-dessus.
+Where `script.py` is the script above.
 
 MariaDB
 -------
@@ -110,15 +110,15 @@ MariaDB
     Query OK, 0 rows affected (0.01 sec)
 
 
-Tester
-~~~~~~
-Si nécessaire :
+Testing
+~~~~~~~
+If needed:
 
 .. code:: bash
 
     ...$ tox
 
-Ou :
+Or:
 
 .. code:: bash
 
@@ -126,7 +126,7 @@ Ou :
     ...$ venv/bin/pip install pytest-cov
     ...$ flake8 --exclude=venv && venv/bin/python3.7 -m pytest --cov-report term-missing --cov=import_sirene  && venv/bin/python3.7 -m pytest --cov-report term-missing --cov-append --doctest-modules import_sirene.py --cov=import_sirene
 
-Ou :
+Or:
 
 .. code:: bash
 
