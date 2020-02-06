@@ -19,19 +19,51 @@ Supported RDBMS
 * SQLite
 * MariaDB
 
+Install
+~~~~~~~
+0. Download DataGouv Tools in a `datagouv_tools` directory.
+
+1. Install Python 3.7 and virtualenv.
+
+Ubuntu:
+
+.. code:: bash
+
+    ...datagouv_tools$ sudo apt-get install python3-virtualenv python3.7
+
+Windows: see https://python.org Python 3.7 download and :
+
+.. code:: bash
+
+    ...datagouv_tools> pip install virtualenv
+
+2. Create and activate a virtual env:
+
+.. code:: bash
+
+    ...datagouv_tools$ mkdir venv
+    ...datagouv_tools$ virtualenv venv
+    ...datagouv_tools$ source venv/bin/activate
+
+3. Install the `datagouv_tools` module :
+
+.. code:: bash
+
+    (venv) ...datagouv_tools$ python3.7 setup.py install
+
+
+
 SIRENE
 ~~~~~~
 1. Download CSV and ZIP files from https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
-2. And run the following lines.
+2. And run:
 
 .. code:: bash
 
-    ...$ source venv/bin/activate # if you use venv
-    ...$ python3.7 setup.py install
-    ...$ dg_script -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
+    ...$ datagouv_tools -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
 
-In a program:
+Or in a program:
 
 .. code:: python
 
@@ -48,15 +80,13 @@ FANTOIR
 ~~~~~~~
 1. Dowload ZIP file from https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
 
-2. And run the following lines.
+2. And run:
 
 .. code:: bash
 
-    ...$ source venv/bin/activate # if you use venv
-    ...$ python3.7 setup.py install
-    ...$ dg_script -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
+    ...$ datagouv_tools -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
 
-In a program:
+Or in a program:
 
 .. code:: python
 

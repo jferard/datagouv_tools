@@ -19,21 +19,52 @@ SGDB supportés
 * SQLite
 * MariaDB
 
+Installation
+~~~~~~~~~~~~
+0. Téléchargez DataGouv Tools dans un répertoire `datagouv_tools`.
+
+1. Installez Python 3.7 et virtualenv.
+
+Ubuntu:
+
+.. code:: bash
+
+    ...datagouv_tools$ sudo apt-get install python3-virtualenv python3.7
+
+Windows: voir https://python.org pour télécharger Python 3.7 et :
+
+.. code:: bash
+
+    ...datagouv_tools> pip install virtualenv
+
+2. Créez et activez un environnement virtuel:
+
+.. code:: bash
+
+    ...datagouv_tools$ mkdir venv
+    ...datagouv_tools$ virtualenv venv
+    ...datagouv_tools$ source venv/bin/activate
+
+3. Installez le module `datagouv_tools`:
+
+.. code:: bash
+
+    (venv) ...datagouv_tools$ python3.7 setup.py install
+
+
 SIRENE
 ~~~~~~
 1. Téléchargez les fichiers CSV et ZIP depuis https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/
 
-2. Exécutez les lignes suivantes :
+2. Executez :
 
 .. code:: bash
 
-    ...$ source venv/bin/activate # if you use venv
-    ...$ python3.7 setup.py install
-    ...$ dg_script -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
+    ...$ datagouv_tools -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
 
-D'autres options sont disponibles.
+D'autres options sont disponibles (mariadb, fantoir).
 
-Dans un programme :
+Ou bien dans un programme :
 
 .. code:: python
 
@@ -50,15 +81,15 @@ FANTOIR
 ~~~~~~~
 1. Téléchargez le fichier ZIP depuis https://www.data.gouv.fr/fr/datasets/fichier-fantoir-des-voies-et-lieux-dits/
 
-2. Exécutez les lignes suivantes :
+2. Exécutez :
 
 .. code:: bash
 
-    ...$ source venv/bin/activate # if you use venv
-    ...$ python3.7 setup.py install
-    ...$ dg_script -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
+    ...$ datagouv_tools -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
 
-Dans un programme
+D'autres options sont disponibles (mariadb, fantoir).
+
+Ou bien dans un programme :
 
 .. code:: python
 
