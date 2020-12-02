@@ -19,20 +19,20 @@
 #
 #
 import csv
-from _csv import QUOTE_ALL
-from dataclasses import dataclass
+from csv import QUOTE_ALL
 from typing import Sequence
 
 from datagouv_tools.util import to_standard
 
 
-@dataclass(unsafe_hash=True)
 class FantoirField:
-    start: int
-    length: int
-    type: str
-    description: str
-    is_filler: bool = False
+    def __init__(self, start: int, length: int, type: str, description: str,
+                 is_filler: bool = False):
+        self.start = start
+        self.length = length
+        self.type = type
+        self.description = description
+        self.is_filler = is_filler
 
     @property
     def end(self):
@@ -47,12 +47,10 @@ class FantoirField:
         return to_standard(self.description)
 
 
-@dataclass
 class RecordFormat:
-    name: str
-    fields: Sequence[FantoirField]
-
-    def __post_init__(self):
+    def __init__(self, name: str, fields: Sequence[FantoirField]):
+        self.name = name
+        self.fields = fields
         self._n_s = [(field.db_name, field.slice) for field in self.fields if
                      not field.is_filler]
         self.header = [f.db_name for f in self.fields if not f.is_filler]
@@ -63,7 +61,7 @@ class RecordFormat:
     def __eq__(self, other):
         return isinstance(other, RecordFormat) and self.name == other.name
 
-    def format(self, line):
+    def to_dict(self, line):
         return {"record_type": self.name, **{n: line[s] for n, s in self._n_s}}
 
     def to_line(self, record):
@@ -184,6 +182,4 @@ class FantoirParser:
             line = line.rstrip("\n")
             record_format = get_record_format(line)
             if record_format is not None and record_format:
-                record = record_format.format(line)
-                yield record
-
+                yield record_format.to_dict(line)
