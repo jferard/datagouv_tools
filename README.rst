@@ -62,7 +62,10 @@ SIRENE
 
     ...$ datagouv_tools -s sirene -r pg --database sirene --user sirene --password yourpass -p /path/to/sirene/directory
 
-D'autres options sont disponibles (mariadb, fantoir).
+D'autres options sont disponibles:
+
+* ``-r mariadb`` pour MariaDB
+* ``-r sqlite`` pour SQLite
 
 Ou bien dans un programme :
 
@@ -87,7 +90,10 @@ FANTOIR
 
     ...$ datagouv_tools -s fantoir -r pg --database sirene --user sirene --password yourpass -p /path/to/fantoir.zip
 
-D'autres options sont disponibles (mariadb, fantoir).
+D'autres options sont disponibles:
+
+* ``-r mariadb`` pour MariaDB
+* ``-r sqlite`` pour SQLite
 
 Ou bien dans un programme :
 
