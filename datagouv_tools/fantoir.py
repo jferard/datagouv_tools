@@ -148,26 +148,15 @@ VOIE_FORMAT = RecordFormat("voie", [
 RECORD_FORMATS = (HEADER_FORMAT, DIRECTION_FORMAT, COMMUNE_FORMAT, VOIE_FORMAT)
 
 
-def get_first_empty_slice_by_record():
-    first_empty_slice_by_record = {}
-    for record_format in RECORD_FORMATS:
-        for field in record_format.fields:
-            if field.is_filler:
-                first_empty_slice_by_record[record_format] = field.slice
-                break
-    return first_empty_slice_by_record
-
-
-FIRST_EMPTY_SLICE_BY_RECORD = get_first_empty_slice_by_record()
-
-
 def get_record_format(line):
-    for record_format in RECORD_FORMATS:
-        s = FIRST_EMPTY_SLICE_BY_RECORD[record_format]
-        data = line[s].strip(' \x00')
-        if not data:
-            return record_format
-    return None
+    if line[0] == '\x00':
+        return HEADER_FORMAT
+    elif line[3] == ' ':
+        return DIRECTION_FORMAT
+    elif line[7] == ' ':
+        return COMMUNE_FORMAT
+    else:
+        return VOIE_FORMAT
 
 
 class fantoir_dialect(csv.Dialect):
@@ -177,3 +166,24 @@ class fantoir_dialect(csv.Dialect):
     skipinitialspace = False
     lineterminator = '\n'
     quoting = QUOTE_ALL
+
+
+def parse(filename):
+    with open(filename, encoding="ascii") as f:
+        yield from FantoirParser(f).parse()
+
+
+class FantoirParser:
+    def __init__(self, f):
+        self._f = f
+
+    def parse(self):
+        for line in self._f:
+            if line[:10] == '9999999999':  # last line
+                continue
+            line = line.rstrip("\n")
+            record_format = get_record_format(line)
+            if record_format is not None and record_format:
+                record = record_format.format(line)
+                yield record
+
