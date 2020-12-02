@@ -25,12 +25,10 @@ from pathlib import Path
 from unittest.mock import Mock, call
 
 from datagouv_tools.import_fantoir import (import_fantoir,
-                                           import_fantoir_thread,
-                                           get_record_format,
-                                           get_first_empty_slice_by_record,
-                                           HEADER_FORMAT,
-                                           VOIE_FORMAT, DIRECTION_FORMAT,
-                                           COMMUNE_FORMAT)
+                                           import_fantoir_thread)
+from datagouv_tools.fantoir import HEADER_FORMAT, DIRECTION_FORMAT, \
+    COMMUNE_FORMAT, VOIE_FORMAT, get_first_empty_slice_by_record, \
+    get_record_format
 from datagouv_tools.sql.generic import FakeConnection
 
 SKIP_IT = True
