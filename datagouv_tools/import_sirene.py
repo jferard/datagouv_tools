@@ -45,7 +45,7 @@ from datagouv_tools.sql.sqlite import SQLiteQueryExecutor
 from datagouv_tools.util import to_snake
 
 logging.basicConfig(level=logging.DEBUG,
-                    format=("%(asctime)s - %(name)s/%(filename)s/%(funcName)s/"
+                    format=("%(asctime)s - %(name)s/%(file)s/%(funcName)s/"
                             "%(lineno)d - %(levelname)s: %(message)s"))
 
 

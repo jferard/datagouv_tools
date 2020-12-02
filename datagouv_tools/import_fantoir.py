@@ -30,7 +30,7 @@ from datagouv_tools.util import CSVStream
 
 create_thread = threading.Thread
 logging.basicConfig(level=logging.DEBUG,
-                    format=("%(asctime)s - %(name)s/%(filename)s/%(funcName)s/"
+                    format=("%(asctime)s - %(name)s/%(file)s/%(funcName)s/"
                             "%(lineno)d - %(levelname)s: %(message)s"))
 
 

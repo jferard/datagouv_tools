@@ -17,15 +17,63 @@
 #  this program. If not, see <http://www.gnu.org/licenses/>.
 #
 #
-
+import io
 import unittest
+import zipfile
 
 from datagouv_tools.fantoir import parse
 
 
 class TestFantoir(unittest.TestCase):
     def test(self):
-        pass
+        data = zipfile.ZipFile(
+            "resources/fantoir/Fichier national FANTOIR (situation octobre 2019)_reduit.zip").read(
+            "-")
+        for r in parse(io.StringIO(data.decode("ascii"))):
+            if r["record_type"] == "direction":
+                self.assertEqual(
+                    ['code_departement', 'code_direction', 'libelle_direction',
+                     'record_type'], list(r))
+            elif r["record_type"] == "commune":
+                self.assertEqual(
+                    ['code_departement',
+                     'code_direction',
+                     'code_commune',
+                     'cle_rivoli',
+                     'libelle_commune',
+                     'type_de_la_commune',
+                     'caractere_rur',
+                     'caractere_de_population',
+                     'population_reelle',
+                     'population_a_part',
+                     'population_fictive',
+                     'caractere_dannulation',
+                     'date_dannulation',
+                     'date_de_creation_de_larticle',
+                     'record_type'], list(r))
+            elif r["record_type"] == "voie":
+                self.assertEqual(
+                    ['code_departement',
+                     'code_direction',
+                     'code_commune',
+                     'identifiant_de_la_voie_dans_la_commune',
+                     'cle_rivoli',
+                     'code_nature_de_voie',
+                     'libelle_voie',
+                     'type_de_la_commune',
+                     'caractere_rur',
+                     'caractere_de_voie',
+                     'caractere_de_population',
+                     'population_a_part',
+                     'population_fictive',
+                     'caractere_dannulation',
+                     'date_dannulation',
+                     'date_de_creation_de_larticle',
+                     'code_identifiant_majic_de_la_voie',
+                     'type_de_voie',
+                     'caractere_du_lieu_dit',
+                     'dernier_mot_entierement_alphabetique_du_libelle_de_la_voie',
+                     'record_type'], list(r))
 
 
 if __name__ == '__main__':

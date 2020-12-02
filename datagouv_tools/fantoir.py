@@ -26,6 +26,9 @@ from datagouv_tools.util import to_standard
 
 
 class FantoirField:
+    """
+    A field of a Fantoir record
+    """
     def __init__(self, start: int, length: int, type: str, description: str,
                  is_filler: bool = False):
         self.start = start
@@ -33,6 +36,7 @@ class FantoirField:
         self.type = type
         self.description = description
         self.is_filler = is_filler
+        self._db_name = to_standard(self.description)
 
     @property
     def end(self):
@@ -44,10 +48,13 @@ class FantoirField:
 
     @property
     def db_name(self):
-        return to_standard(self.description)
+        return self._db_name
 
 
 class RecordFormat:
+    """"
+    The format of a Fantoir record: header, direction, commune...
+    """
     def __init__(self, name: str, fields: Sequence[FantoirField]):
         self.name = name
         self.fields = fields
@@ -62,7 +69,9 @@ class RecordFormat:
         return isinstance(other, RecordFormat) and self.name == other.name
 
     def to_dict(self, line):
-        return {"record_type": self.name, **{n: line[s] for n, s in self._n_s}}
+        ret = {n: line[s] for n, s in self._n_s}
+        ret["record_type"] = self.name
+        return ret
 
     def to_line(self, record):
         return "\t".join(record[k].strip() for k in self.header) + "\n"
@@ -166,9 +175,12 @@ class fantoir_dialect(csv.Dialect):
     quoting = QUOTE_ALL
 
 
-def parse(filename):
-    with open(filename, encoding="ascii") as f:
-        yield from FantoirParser(f).parse()
+def parse(file):
+    if hasattr(file, 'read'):
+        yield from FantoirParser(file).parse()
+    else:
+        with open(file, encoding="ascii") as f:
+            yield from FantoirParser(f).parse()
 
 
 class FantoirParser:
