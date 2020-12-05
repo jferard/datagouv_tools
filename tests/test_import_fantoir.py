@@ -26,9 +26,9 @@ from unittest.mock import Mock, call
 
 from datagouv_tools.import_fantoir import (import_fantoir,
                                            import_fantoir_thread)
-from datagouv_tools.fantoir import HEADER_FORMAT, DIRECTION_FORMAT, \
-    COMMUNE_FORMAT, VOIE_FORMAT, get_first_empty_slice_by_record, \
-    get_record_format
+from datagouv_tools.fantoir import (HEADER_FORMAT, DIRECTION_FORMAT,
+                                    COMMUNE_FORMAT, VOIE_FORMAT,
+                                    get_record_format)
 from datagouv_tools.sql.generic import FakeConnection
 
 SKIP_IT = True
@@ -178,13 +178,6 @@ class TestImportFantoir(unittest.TestCase):
         import_fantoir_thread(
             lambda: mariadb.connect(user="sirene", password="yourpass",
                                     database="sirene"), fantoir_path, rdbms)
-
-    def test_get_first_empty_slice_by_record(self):
-        self.assertEqual({HEADER_FORMAT: slice(0, 10, None),
-                          DIRECTION_FORMAT: slice(3, 11, None),
-                          COMMUNE_FORMAT: slice(6, 10, None),
-                          VOIE_FORMAT: slice(41, 42, None), },
-                         get_first_empty_slice_by_record())
 
     def test_get_record_format(self):
         for line, expected in [

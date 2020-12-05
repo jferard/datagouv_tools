@@ -201,8 +201,7 @@ class Dispatcher:
             line = line.rstrip("\n")
             record_format = get_record_format(line)
             if record_format is not None and record_format:
-                record = record_format.to_dict(line)
-                csv_line = record_format.to_line(record)
+                csv_line = record_format.to_row(line)
                 self._send_to(record_format.name, csv_line)
 
 

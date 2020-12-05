@@ -20,15 +20,16 @@
 #
 import csv
 from csv import QUOTE_ALL
-from typing import Sequence
+from typing import Sequence, Mapping, Union, Generator, Iterator, Any, io
 
 from datagouv_tools.util import to_standard
 
 
 class FantoirField:
     """
-    A field of a Fantoir record
+    A field of a Fantoir record_mapping
     """
+
     def __init__(self, start: int, length: int, type: str, description: str,
                  is_filler: bool = False):
         self.start = start
@@ -53,28 +54,39 @@ class FantoirField:
 
 class RecordFormat:
     """"
-    The format of a Fantoir record: header, direction, commune...
+    The format of a Fantoir record_mapping: header, direction, commune...
     """
+
     def __init__(self, name: str, fields: Sequence[FantoirField]):
         self.name = name
         self.fields = fields
-        self._n_s = [(field.db_name, field.slice) for field in self.fields if
-                     not field.is_filler]
         self.header = [f.db_name for f in self.fields if not f.is_filler]
+        self._slices = [f.slice for f in self.fields if not f.is_filler]
+        self._slice_by_name = {f.db_name: f.slice for f in self.fields if
+                               not f.is_filler}
 
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        return isinstance(other, RecordFormat) and self.name == other.name
-
-    def to_dict(self, line):
-        ret = {n: line[s] for n, s in self._n_s}
+    def to_dict(self, line: str) -> Mapping[str, str]:
+        ret = {n: line[s] for n, s in zip(self.header, self._slices)}
         ret["record_type"] = self.name
         return ret
 
-    def to_line(self, record):
-        return "\t".join(record[k].strip() for k in self.header) + "\n"
+    def to_row(self, line: str) -> str:
+        return "\t".join([line[self._slices[i]].strip() for i, k in
+                          enumerate(self.header)]) + "\n"
+
+    def get(self, line: str, item: Union[int, slice, str]) -> str:
+        if isinstance(item, (int, slice)):
+            return line[self._slices[item]]
+        elif isinstance(item, str):
+            return line[self._slice_by_name[item]]
+        else:
+            raise TypeError
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, RecordFormat) and self.name == other.name
 
 
 HEADER_FORMAT = RecordFormat("header", [
@@ -155,7 +167,7 @@ VOIE_FORMAT = RecordFormat("voie", [
 RECORD_FORMATS = (HEADER_FORMAT, DIRECTION_FORMAT, COMMUNE_FORMAT, VOIE_FORMAT)
 
 
-def get_record_format(line):
+def get_record_format(line: str) -> RecordFormat:
     if line[0] == '\x00':
         return HEADER_FORMAT
     elif line[3] == ' ':
@@ -164,6 +176,24 @@ def get_record_format(line):
         return COMMUNE_FORMAT
     else:
         return VOIE_FORMAT
+
+
+class Record:
+    def __init__(self, record_format: RecordFormat, line: str):
+        self._line = line
+        self._record_format = record_format
+
+    def to_dict(self) -> Mapping[str, str]:
+        return self._record_format.to_dict(self._line)
+
+    def to_row(self) -> str:
+        return self._record_format.to_row(self._line)
+
+    def get_type(self) -> str:
+        return self._record_format.name
+
+    def __getitem__(self, item) -> str:
+        return self._record_format.get(self._line, item)
 
 
 class fantoir_dialect(csv.Dialect):
@@ -335,11 +365,11 @@ NATURE_VOIE_BY_CODE = {
 CODE_BY_NATURE_VOIE = {v: k for k, v in NATURE_VOIE_BY_CODE.items()}
 
 
-def nature_voie(code: str):
+def nature_voie(code: str) -> str:
     return NATURE_VOIE_BY_CODE.get(code, code)
 
 
-def parse(file):
+def parse(file: Union[str, io.TextIO]) -> Iterator[Record]:
     if hasattr(file, 'read'):
         yield from FantoirParser(file).parse()
     else:
@@ -348,14 +378,14 @@ def parse(file):
 
 
 class FantoirParser:
-    def __init__(self, f):
+    def __init__(self, f: Iterator[str]):
         self._f = f
 
-    def parse(self):
+    def parse(self) -> Iterator[Record]:
         for line in self._f:
             if line[:10] == '9999999999':  # last line
                 continue
             line = line.rstrip("\n")
             record_format = get_record_format(line)
             if record_format is not None and record_format:
-                yield record_format.to_dict(line)
+                yield Record(record_format, line)

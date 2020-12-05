@@ -20,60 +20,37 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from datagouv_tools.fantoir import parse
 
 
 class TestFantoir(unittest.TestCase):
+    def setUp(self):
+        self.maxDiff = None
+        self.path = Path(
+            Path(__file__).parent, "resources", "fantoir",
+            r"Fichier national FANTOIR (situation octobre 2019)_reduit.zip")
+
     def test(self):
-        data = zipfile.ZipFile(
-            "resources/fantoir/Fichier national FANTOIR (situation octobre 2019)_reduit.zip").read(
-            "-")
+        data = zipfile.ZipFile(self.path).read("-")
         for r in parse(io.StringIO(data.decode("ascii"))):
-            if r["record_type"] == "direction":
+            record_type = r.get_type()
+            if record_type == "direction":
                 self.assertEqual(
-                    ['code_departement', 'code_direction', 'libelle_direction',
-                     'record_type'], list(r))
-            elif r["record_type"] == "commune":
+                    ['01', '0', 'AIN                           '], list(r))
+            elif record_type == "commune":
                 self.assertEqual(
-                    ['code_departement',
-                     'code_direction',
-                     'code_commune',
-                     'cle_rivoli',
-                     'libelle_commune',
-                     'type_de_la_commune',
-                     'caractere_rur',
-                     'caractere_de_population',
-                     'population_reelle',
-                     'population_a_part',
-                     'population_fictive',
-                     'caractere_dannulation',
-                     'date_dannulation',
-                     'date_de_creation_de_larticle',
-                     'record_type'], list(r))
-            elif r["record_type"] == "voie":
+                    ['01', '0', '001', 'W', "L'ABERGEMENT-CLEMENCIAT       ",
+                     'N', '3', ' ', '0000825', '0000000', '0000000', ' ',
+                     '0000000', '1987001'], list(r))
+            elif record_type == "voie":
                 self.assertEqual(
-                    ['code_departement',
-                     'code_direction',
-                     'code_commune',
-                     'identifiant_de_la_voie_dans_la_commune',
-                     'cle_rivoli',
-                     'code_nature_de_voie',
-                     'libelle_voie',
-                     'type_de_la_commune',
-                     'caractere_rur',
-                     'caractere_de_voie',
-                     'caractere_de_population',
-                     'population_a_part',
-                     'population_fictive',
-                     'caractere_dannulation',
-                     'date_dannulation',
-                     'date_de_creation_de_larticle',
-                     'code_identifiant_majic_de_la_voie',
-                     'type_de_voie',
-                     'caractere_du_lieu_dit',
-                     'dernier_mot_entierement_alphabetique_du_libelle_de_la_voie',
-                     'record_type'], list(r))
+                    ['01', '0', '001', 'A008', 'W', 'LOT ',
+                     'BELLEVUE                  ', 'N', '3', '0', ' ',
+                     '0000000', '0000000', ' ', '0000000', '2001351', '00059',
+                     '2', ' ', 'BELLEVUE'], list(r))
+                break
 
 
 if __name__ == '__main__':
