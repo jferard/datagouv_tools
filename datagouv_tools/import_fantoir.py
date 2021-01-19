@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 from zipfile import ZipFile
 
-from datagouv_tools.fantoir import RecordFormat, HEADER_FORMAT, RECORD_FORMATS, \
-    get_record_format, fantoir_dialect
+from datagouv_tools.fantoir import (RecordFormat, HEADER_FORMAT,
+                                    RECORD_FORMATS, get_record_format,
+                                    fantoir_dialect)
 from datagouv_tools.import_generic import (ImporterContext,
                                            ImporterThreadContext)
 from datagouv_tools.sql.generic import (SQLTable, SQLField, QueryExecutor,

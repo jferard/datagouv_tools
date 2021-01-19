@@ -20,7 +20,7 @@
 #
 import csv
 from csv import QUOTE_ALL
-from typing import Sequence, Mapping, Union, Generator, Iterator, Any, io
+from typing import (Sequence, Mapping, Union, Iterator, io)
 
 from datagouv_tools.util import to_standard
 
@@ -217,7 +217,8 @@ NATURE_VOIE_BY_CODE = {
     'ZUP': 'ZUP'
 }
 
-CODE_BY_NATURE_VOIE = {v: k for k, vs in NATURE_VOIE_BY_CODE.items() for v in vs.split(", ")}
+CODE_BY_NATURE_VOIE = {v: k for k, vs in NATURE_VOIE_BY_CODE.items() for v in
+                       vs.split(", ")}
 
 
 def nature_voie(code: str) -> str:
