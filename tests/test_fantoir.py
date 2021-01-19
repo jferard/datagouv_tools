@@ -22,7 +22,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from datagouv_tools.fantoir import parse
+from datagouv_tools.fantoir import parse, nature_voie, code_voie, \
+    CODE_BY_NATURE_VOIE, NATURE_VOIE_BY_CODE
 
 
 class TestFantoir(unittest.TestCase):
@@ -31,6 +32,19 @@ class TestFantoir(unittest.TestCase):
         self.path = Path(
             Path(__file__).parent, "resources", "fantoir",
             r"Fichier national FANTOIR (situation octobre 2019)_reduit.zip")
+
+    def test_nature_voie_code_voie(self):
+        self.assertEqual("RUE", nature_voie("RUE"))
+        self.assertEqual("RUE", NATURE_VOIE_BY_CODE["RUE"])
+        self.assertEqual("XYZ", nature_voie("XYZ"))
+        self.assertEqual("SENTIER, SENTE", nature_voie("SEN"))
+        self.assertEqual("SENTIER, SENTE", NATURE_VOIE_BY_CODE["SEN"])
+
+        self.assertEqual("RUE", code_voie("RUE"))
+        self.assertEqual("XYZ", code_voie("XYZ"))
+        self.assertEqual("SEN", CODE_BY_NATURE_VOIE["SENTIER"])
+        self.assertEqual("SEN", code_voie("SENTIER"))
+#        self.assertEqual("SEN", code_voie("SENTE"))
 
     def test(self):
         data = zipfile.ZipFile(self.path).read("-")
