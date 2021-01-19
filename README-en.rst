@@ -6,7 +6,7 @@ License: GPL v3
 .. image:: https://travis-ci.com/jferard/datagouv_tools.svg?branch=master
     :target: https://travis-ci.com/jferard/datagouv_tools
 .. image:: https://codecov.io/gh/jferard/datagouv_tools/branch/master/graph/badge.svg
-:target: https://codecov.io/gh/jferard/datagouv_tools
+    :target: https://codecov.io/gh/jferard/datagouv_tools
 
 Goal
 ~~~~
