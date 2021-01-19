@@ -1,7 +1,12 @@
 DataGouv Tools. An utility to import  some data.gouv.fr data to PostgreSQL and other DBMS.
-     Copyright (C) 2020 J. Férard <https://github.com/jferard>
+     Copyright (C) 2020-2021 J. Férard <https://github.com/jferard>
 
 License: GPL v3
+
+.. image:: https://travis-ci.com/jferard/datagouv_tools.svg?branch=master
+    :target: https://travis-ci.com/jferard/datagouv_tools
+.. image:: https://codecov.io/gh/jferard/datagouv_tools/branch/master/graph/badge.svg
+:target: https://codecov.io/gh/jferard/datagouv_tools
 
 `English version of README <README-en.rst>`_
 
