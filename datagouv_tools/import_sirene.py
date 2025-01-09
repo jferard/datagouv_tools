@@ -181,7 +181,6 @@ class SireneSchemaParser:
                     self.get_fields()],
             indices=[index.process(process_names) for index in
                      self.get_indices()]
-
         )
 
 

@@ -106,7 +106,7 @@ def consumer_factory(import_context: ImporterThreadContext,
 # TEMP #
 ########
 
-def _import_with_temp(path_zipped: Path, importer_context: ImporterContext):
+def _import_fantoir_with_temp(path_zipped: Path, importer_context: ImporterContext):
     temp_path_by_name = dispatch_to_temp(path_zipped)
     for record_format in RECORD_FORMATS:
         if record_format == HEADER_FORMAT:
@@ -319,7 +319,7 @@ def import_fantoir(connection, fantoir_path, rdbms):
     if context_factory is None:
         raise ValueError(f"Unknown RDBMS '{rdbms}'")
     importer_context = context_factory(logger, connection)
-    _import_with_temp(fantoir_path, importer_context)
+    _import_fantoir_with_temp(fantoir_path, importer_context)
 
 
 def import_fantoir_thread(new_connection, fantoir_path, rdbms):

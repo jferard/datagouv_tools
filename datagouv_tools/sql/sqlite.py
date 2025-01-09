@@ -21,7 +21,7 @@ from codecs import getreader
 from csv import Dialect, reader as csv_reader
 from io import BytesIO
 from logging import Logger
-from typing import Iterable
+from typing import Iterable, Iterator, Tuple
 
 from datagouv_tools.sql.generic import (QueryProvider,
                                         QueryExecutor, SQLTable)
@@ -65,6 +65,4 @@ class SQLiteQueryExecutor(QueryExecutor):
         stream = getreader(encoding)(stream)
         reader = csv_reader(stream, dialect)
         next(reader)
-        query = self.query_provider.insert_all(table)
-        # SQLite does not need typed values
-        self.executemany(query, reader)
+        self.insert_rows(table, reader)

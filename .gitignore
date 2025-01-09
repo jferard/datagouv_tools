@@ -1,6 +1,7 @@
 venv
 dist
 build
+test_files
 __pycache__
 .idea
 *.pyc

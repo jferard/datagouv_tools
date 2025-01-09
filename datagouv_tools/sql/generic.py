@@ -28,7 +28,7 @@ from io import BytesIO
 from itertools import chain
 from pathlib import Path
 from typing import (Callable, Iterable, Generic, TypeVar, Any, BinaryIO,
-                    Collection)
+                    Collection, Tuple)
 
 from datagouv_tools.sql.sql_type import SQLType, SQLIndexType, SQLTypes
 
@@ -259,12 +259,15 @@ class QueryExecutor(ABC):
         stream = getreader(encoding)(stream)
         reader = csv_reader(stream, dialect)
         next(reader)
-        query = self.query_provider.insert_all(table)
         table_fields = table.fields
         typed_reader = (tuple(field.type_value(value)
                               for field, value in zip(table_fields, row))
                         for row in reader)
-        self.executemany(query, typed_reader)
+        self.insert_rows(table, typed_reader)
+
+    def insert_rows(self, table: SQLTable, rows: Iterable[Tuple]):
+        query = self.query_provider.insert_all(table)
+        self.executemany(query, rows)
 
     def finalize_copy(self, table: SQLTable):
         """
